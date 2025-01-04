@@ -4,6 +4,11 @@ export class ArrayType extends Type<Type<any>[]> {
     constructor(value: Type<any>[]) {
         super("array", value, {
             str: () => `[${value.map(v => v.str()).join(", ")}]`,
+            getValue: () => {
+                return value.map(i => {
+                    return i.getValue();
+                })
+            },
             get: (obj: Type<number>) => {
                 const index = obj.getValue();
                 if (index >= 0 && index < value.length) {

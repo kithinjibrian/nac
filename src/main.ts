@@ -1,11 +1,19 @@
-import { Builtin, Interpreter } from "./interpreter";
-import { Lexer } from "./lexer";
-import { Type } from "./objects/base";
-import { Parser } from "./parser";
+import {
+    Builtin,
+    Interpreter,
+    Lexer,
+    Parser,
+    Phases,
+    Type,
+    TypeChecker
+} from "./types";
+
+export * from "./types";
 
 export const builtin: Record<string, Builtin> = {
     print: {
-        signature: "[string] -> number",
+        type: "function",
+        signature: "<T>(args: T) -> integer",
         filter: (args: Type<any>[]) => {
             return args.map(i => i.str())
         },
@@ -16,23 +24,39 @@ export const builtin: Record<string, Builtin> = {
 }
 
 export class Nac {
-    constructor(code: string, builtin: Record<string, Builtin>) {
+    constructor(
+        code: string,
+        builtin: Record<string, Builtin>,
+        passes?: any[]
+    ) {
+        const _passes = new Phases(
+            passes ?? [
+                new TypeChecker(),
+                new Interpreter()
+            ],
+            builtin
+        );
+
         const lexer = new Lexer(code);
         const tokens = lexer.tokenize();
         const parser = new Parser(tokens);
         const ast = parser.parse();
-        new Interpreter(ast, builtin);
+
+        _passes.run(ast);
     }
 }
 
-const nac = new Nac(
-    `
-    let a = 0;
-    for(a; a < 10; a += 1) {
-        if(a == 5)
-            continue;
-        print(a);
-    }
-    `,
-    builtin
-)
+// new Nac(
+//     `
+//     struct User {
+//         name: string;
+//     }
+
+//     let a = User {
+//         name: "kithinji"
+//     };
+
+//     print(a.name);
+//     `,
+//     builtin
+// )

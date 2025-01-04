@@ -1,6 +1,6 @@
 export interface Operations<T> {
     getType?: () => string;
-    getValue?: () => string;
+    getValue?: () => any;
     inc?: () => Type<T>;
     dec?: () => Type<T>;
     add?: (obj: Type<T>) => Type<T>;
@@ -18,7 +18,7 @@ export interface Operations<T> {
 }
 
 export abstract class Type<T> {
-    protected readonly type: string;
+    public type: string;
     protected readonly value: T;
     protected readonly operations: Operations<T>;
 
@@ -36,6 +36,9 @@ export abstract class Type<T> {
     }
 
     getValue(): T {
+        if (this.operations.getValue) {
+            return this.operations.getValue();
+        }
         return this.value;
     }
 

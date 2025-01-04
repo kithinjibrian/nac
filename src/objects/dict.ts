@@ -4,8 +4,13 @@ import { BoolType } from "./bool";
 export class DictType extends Type<Record<string, Type<any>>> {
     constructor(value: Record<string, Type<any>>) {
         super("object", value, {
+            getValue: () => {
+                return Object.entries(value).reduce((acc, [key, val]) => {
+                    acc[key] = val.getValue();
+                    return acc;
+                }, {} as Record<string, any>);
+            },
             str: (indentLevel = 0) => {
-
                 let result = "{\n";
 
                 const indent = "  ".repeat(indentLevel + 1);

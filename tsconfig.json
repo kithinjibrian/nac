@@ -2,9 +2,16 @@
   "compilerOptions": {
     "target": "ES6",
     "module": "CommonJS",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "declaration": true,
+    "declarationMap": true,
     "rootDir": "src",
     "outDir": "dist",
-    "strict": true
+    "strict": true,
+    "moduleResolution": "node",
   },
-  "include": ["src"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

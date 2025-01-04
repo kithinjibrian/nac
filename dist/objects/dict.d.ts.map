@@ -1,0 +1,1 @@
+{"version":3,"file":"dict.d.ts","sourceRoot":"","sources":["../../src/objects/dict.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,IAAI,EAAE,MAAM,QAAQ,CAAC;AAG9B,qBAAa,QAAS,SAAQ,IAAI,CAAC,MAAM,CAAC,MAAM,EAAE,IAAI,CAAC,GAAG,CAAC,CAAC,CAAC;gBAC7C,KAAK,EAAE,MAAM,CAAC,MAAM,EAAE,IAAI,CAAC,GAAG,CAAC,CAAC;CA6C/C"}

@@ -1,5 +1,38 @@
-import { ArrayNode, ASTNode, BlockNode, ExpressionStatementNode, ForNode, FunctionDecNode, IdentifierNode, IfElseNode, NumberNode, ObjectNode, ParameterNode, ParametersListNode, PropertNode, ReturnNode, SourceElementsNode, StringNode, VariableListNode, VariableNode, WhileNode } from "./ast";
-import { Token, TokenType } from "./lexer";
+import {
+    ASTNode,
+    ForNode,
+    ArrayNode,
+    BlockNode,
+    WhileNode,
+    IfElseNode,
+    NumberNode,
+    ObjectNode,
+    ReturnNode,
+    StringNode,
+    PropertyNode,
+    VariableNode,
+    ParameterNode,
+    IdentifierNode,
+    FunctionDecNode,
+    VariableListNode,
+    ParametersListNode,
+    SourceElementsNode,
+    ExpressionStatementNode,
+    ExpressionNode,
+    BinaryOpNode,
+    MemberExpressionNode,
+    CallExpressionNode,
+    ArrowExpressionNode,
+    TypeNode,
+    TypeParameterNode,
+    GenericTypeNode,
+    StructNode,
+    FieldNode,
+    StructDefNode,
+} from "./ast";
+
+import { Token } from "../lexer/lexer";
+import { TokenType } from "../lexer/token";
 
 export class Parser {
     private tokens: Token[] = [];
@@ -18,7 +51,8 @@ export class Parser {
     }
 
     private is_at_end(): boolean {
-        return this.peek().type === TokenType.EOF;
+        return this.peek() == undefined ||
+            this.peek().type === TokenType.EOF;
     }
 
     private advance(): Token {
@@ -57,10 +91,7 @@ export class Parser {
             sources.push(this.source_element());
         }
 
-        return {
-            type: 'SourceElements',
-            sources
-        }
+        return new SourceElementsNode(sources);
     }
 
     private source_element(): ASTNode {
@@ -82,6 +113,15 @@ export class Parser {
         }
 
         const functionName = this.previous().value;
+        let tp: TypeParameterNode[] | undefined = undefined;
+
+        if (this.match(TokenType.LT)) {
+            tp = this.type_parameters();
+
+            if (!this.match(TokenType.GT)) {
+                this.error("Expected token '>'")
+            }
+        }
 
         // Expect opening parenthesis
         if (!this.match(TokenType.LeftParen)) {
@@ -96,13 +136,14 @@ export class Parser {
             this.error("Expected ')' after parameters");
         }
 
-        return {
-            type: 'FunctionDec',
-            inbuilt: false,
-            identifier: functionName,
-            params: parameters,
-            body: this.block()
-        };
+        return new FunctionDecNode(
+            functionName,
+            parameters,
+            this.block(),
+            false,
+            false,
+            tp
+        );
     }
 
     private parameters_list(): ParametersListNode | undefined {
@@ -117,19 +158,19 @@ export class Parser {
             parameters.push(this.parameter());
         } while (this.match(TokenType.Comma));
 
-        return {
-            type: 'ParametersList',
-            parameters
-        }
+        return new ParametersListNode(parameters);
     }
 
     private parameter(): ParameterNode {
+        let variadic = false;
+
+        if (this.match(TokenType.Ellipsis)) {
+            variadic = true;
+        }
+
         const identifier = this.identifier();
 
-        return {
-            type: 'Parameter',
-            identifier
-        }
+        return new ParameterNode(identifier, variadic);
     }
 
     /*
@@ -153,6 +194,8 @@ export class Parser {
                 return this.block();
             case TokenType.If:
                 return this.if_statement();
+            case TokenType.Struct:
+                return this.struct_statement();
             case TokenType.Let:
                 {
                     const node = this.variable_statement();
@@ -188,10 +231,7 @@ export class Parser {
             this.error("Expected '}' before function body");
         }
 
-        return {
-            type: 'Block',
-            body
-        }
+        return new BlockNode(body);
     }
 
     private return_statement(): ReturnNode {
@@ -200,9 +240,7 @@ export class Parser {
         }
 
         if (this.match(TokenType.SemiColon)) {
-            return {
-                type: 'Return'
-            }
+            return new ReturnNode();
         }
 
         const expression = this.expression();
@@ -211,10 +249,7 @@ export class Parser {
             this.error("Expected ';' after return statement");
         }
 
-        return {
-            type: 'Return',
-            expression
-        }
+        return new ReturnNode(expression);
     }
 
     private break_statement(): ASTNode {
@@ -227,7 +262,10 @@ export class Parser {
         }
 
         return {
-            type: "Break"
+            type: "Break",
+            accept(visitor) {
+                visitor.visitBreak?.(this);
+            }
         }
     }
 
@@ -241,7 +279,10 @@ export class Parser {
         }
 
         return {
-            type: "Continue"
+            type: "Continue",
+            accept(visitor) {
+                visitor.visitContinue?.(this);
+            }
         }
     }
 
@@ -256,10 +297,7 @@ export class Parser {
             variables.push(this.variable());
         } while (this.match(TokenType.Comma))
 
-        return {
-            type: 'Let',
-            variables
-        }
+        return new VariableListNode(variables);
     }
 
     private variable(): VariableNode {
@@ -270,11 +308,7 @@ export class Parser {
             expression = this.assignment_expression();
         }
 
-        return {
-            type: 'Variable',
-            identifier,
-            expression
-        }
+        return new VariableNode(identifier, expression);
     }
 
     private while_statement(): WhileNode {
@@ -299,11 +333,7 @@ export class Parser {
 
         const body = this.statement();
 
-        return {
-            type: 'While',
-            expression,
-            body
-        }
+        return new WhileNode(expression, body);
     }
 
     private for_statement(): ForNode {
@@ -346,13 +376,7 @@ export class Parser {
 
         const body = this.statement();
 
-        return {
-            type: "For",
-            init,
-            condition,
-            update,
-            body
-        }
+        return new ForNode(init, condition, update, body);
     }
 
     private if_statement(): IfElseNode {
@@ -378,19 +402,10 @@ export class Parser {
         if (this.match(TokenType.Else)) {
             const alternate = this.statement();
 
-            return {
-                type: 'IfElse',
-                condition,
-                consequent,
-                alternate
-            }
+            return new IfElseNode(condition, consequent, alternate);
         }
 
-        return {
-            type: 'IfElse',
-            condition,
-            consequent
-        }
+        return new IfElseNode(condition, consequent);
     }
 
     private expression_statement(): ExpressionStatementNode {
@@ -400,10 +415,7 @@ export class Parser {
             this.error("Expected ';' after expression");
         }
 
-        return {
-            type: 'ExpressionStatement',
-            expression
-        };
+        return new ExpressionStatementNode(expression);
     }
 
     private expression(): ASTNode {
@@ -416,10 +428,7 @@ export class Parser {
                 expressions.push(this.assignment_expression());
             } while (this.match(TokenType.Comma));
 
-            return {
-                type: 'Expression',
-                expressions
-            } as ASTNode;
+            return new ExpressionNode(expressions);
         }
 
         return expr;
@@ -439,7 +448,10 @@ export class Parser {
                 type: 'AssignmentExpression',
                 left,
                 operator,
-                right
+                right,
+                accept(visitor, args) {
+                    visitor.visitAssignmentExpression?.(this as BinaryOpNode, args)
+                }
             } as ASTNode;
 
         }
@@ -487,7 +499,10 @@ export class Parser {
                 type: 'TertiaryExpression',
                 condition,
                 consequent,
-                alternate
+                alternate,
+                accept(visitor) {
+                    visitor.visitTertiaryExpression?.(this)
+                }
             } as ASTNode;
         }
 
@@ -500,12 +515,7 @@ export class Parser {
         while (this.match(TokenType.Or)) {
             const operator = this.previous().value;
             const right = this.logical_and_expression();
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
         }
 
         return expr;
@@ -517,12 +527,7 @@ export class Parser {
         while (this.match(TokenType.And)) {
             const operator = this.previous().value;
             const right = this.logical_and_expression();
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
         }
 
         return expr;
@@ -534,12 +539,7 @@ export class Parser {
         while (this.match(TokenType.Pipe)) {
             const operator = this.previous().value;
             const right = this.bitwise_xor_expression();
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
         }
 
         return expr;
@@ -551,12 +551,7 @@ export class Parser {
         while (this.match(TokenType.Caret)) {
             const operator = this.previous().value;
             const right = this.bitwise_and_expression();
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
         }
 
         return expr;
@@ -568,12 +563,7 @@ export class Parser {
         while (this.match(TokenType.Ampersand)) {
             const operator = this.previous().value;
             const right = this.equality_expression();
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
         }
 
         return expr;
@@ -586,12 +576,7 @@ export class Parser {
             const operator = this.advance().value;
             const right = this.relational_expression();
 
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
 
         }
 
@@ -610,12 +595,7 @@ export class Parser {
             const operator = this.advance().value;
             const right = this.shift_expression();
 
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
         }
 
         return expr;
@@ -635,12 +615,7 @@ export class Parser {
             const operator = this.advance().value;
             const right = this.additive_expression();
 
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
 
         }
 
@@ -659,12 +634,7 @@ export class Parser {
             const operator = this.advance().value;
             const right = this.multiplicative_expression();
 
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
 
         }
 
@@ -683,12 +653,7 @@ export class Parser {
             const operator = this.advance().value;
             const right = this.unary_expression();
 
-            expr = {
-                type: 'BinaryExpression',
-                operator,
-                left: expr,
-                right
-            } as ASTNode;
+            expr = new BinaryOpNode(operator, expr, right);
 
         }
 
@@ -725,12 +690,7 @@ export class Parser {
                 if (!this.match(TokenType.RightBracket)) {
                     this.error("Expected ']' after array index");
                 }
-                expr = {
-                    type: 'MemberExpression',
-                    object: expr,
-                    property: index,
-                    computed: true
-                } as ASTNode;
+                expr = new MemberExpressionNode(expr, index, true);
             }
             else if (this.match(TokenType.LeftParen)) {
                 // Function call: expr(args)
@@ -745,11 +705,7 @@ export class Parser {
                     this.error("Expected ')' after function arguments");
                 }
 
-                expr = {
-                    type: 'CallExpression',
-                    callee: expr,
-                    arguments: args
-                } as ASTNode;
+                expr = new CallExpressionNode(expr, args);
             }
             else if (this.match(TokenType.Dot)) {
                 // Member access: expr.id
@@ -757,15 +713,11 @@ export class Parser {
                     this.error("Expected identifier after '.'");
                 }
 
-                expr = {
-                    type: 'MemberExpression',
-                    object: expr,
-                    property: {
-                        type: 'Identifier',
-                        name: this.previous().value
-                    },
-                    computed: false
-                } as ASTNode;
+                expr = new MemberExpressionNode(
+                    expr,
+                    new IdentifierNode(this.previous().value),
+                    false
+                )
             }
             else if (this.match(TokenType.Arrow)) {
                 // Arrow operator: expr->id
@@ -773,14 +725,10 @@ export class Parser {
                     this.error("Expected identifier after '->'");
                 }
 
-                expr = {
-                    type: 'ArrowExpression',
-                    object: expr,
-                    property: {
-                        type: 'Identifier',
-                        name: this.previous().value
-                    }
-                } as ASTNode;
+                expr = new ArrowExpressionNode(
+                    expr,
+                    new IdentifierNode(this.previous().value)
+                )
             }
             // else if (this.match(TokenType.Increment, TokenType.Decrement)) {
             //     // Postfix increment/decrement: expr++ or expr--
@@ -805,8 +753,15 @@ export class Parser {
                 return this.number();
             case TokenType.String:
                 return this.string();
-            case TokenType.Identifier:
-                return this.identifier();
+            case TokenType.Identifier: {
+                const iden = this.identifier();
+                if (this.peek().type == TokenType.LeftBrace) {
+                    const object = this.object();
+                    return new StructDefNode(iden.name, object);
+                }
+
+                return iden;
+            }
             case TokenType.LeftParen:
                 {
                     this.advance();
@@ -831,10 +786,7 @@ export class Parser {
             this.error("Expected a number");
         }
 
-        return {
-            type: 'Number',
-            value: +this.previous().value
-        }
+        return new NumberNode(+this.previous().value);
     }
 
     private string(): StringNode {
@@ -842,10 +794,7 @@ export class Parser {
             this.error("Expected a string");
         }
 
-        return {
-            type: 'String',
-            value: this.previous().value
-        }
+        return new StringNode(this.previous().value);
     }
 
     private array(): ArrayNode {
@@ -865,14 +814,11 @@ export class Parser {
             this.error("Expected a ']'");
         }
 
-        return {
-            type: 'Array',
-            elements
-        }
+        return new ArrayNode(elements);
     }
 
     private object(): ObjectNode {
-        const properties: PropertNode[] = [];
+        const properties: PropertyNode[] = [];
 
         if (!this.match(TokenType.LeftBrace)) {
             this.error("Expected a '{'");
@@ -888,21 +834,18 @@ export class Parser {
             this.error("Expected a '}'");
         }
 
-        return {
-            type: 'Object',
-            properties
-        }
+        return new ObjectNode(properties);
     }
 
-    private property_definition(): PropertNode {
-        let key: ASTNode;
+    private property_definition(): PropertyNode {
+        let key: string;
         switch (this.peek().type) {
             case TokenType.String:
-                key = this.string();
+            case TokenType.Identifier: {
+                key = this.peek().value;
+                this.advance();
                 break;
-            case TokenType.Identifier:
-                key = this.identifier();
-                break;
+            }
             default:
                 this.error("Unexpected property name")
         }
@@ -913,11 +856,7 @@ export class Parser {
 
         const value = this.assignment_expression();
 
-        return {
-            type: 'Property',
-            key,
-            value
-        }
+        return new PropertyNode(key, value);
     }
 
     private identifier(): IdentifierNode {
@@ -925,9 +864,228 @@ export class Parser {
             this.error("Expected an identifer");
         }
 
-        return {
-            type: 'Identifier',
-            name: this.previous().value
+        let data_type = undefined;
+        const name = this.previous().value;
+
+        if (this.match(TokenType.Colon)) {
+            data_type = this.type();
         }
+
+        return new IdentifierNode(name, data_type);
+    }
+
+    public type(): ASTNode {
+        let type: ASTNode | null = null;
+
+        if ((type = this.generic_type())) {
+            return type;
+        } else if ((type = this.array_type())) {
+            return type;
+        } else if ((type = this.map_type())) {
+            return type;
+        } else if ((type = this.function_type())) {
+            return type;
+        } else if ((type = this.struct_type())) {
+            return type;
+        } else if ((type = this.primitive())) {
+            return type;
+        }
+
+        return {
+            type: "",
+            accept() { }
+        };
+    }
+
+    private generic_type(): GenericTypeNode | null {
+        if (!this.match(TokenType.LT)) {
+            return null;
+        }
+
+        const tp = this.type_parameters();
+
+
+        if (!this.match(TokenType.GT)) {
+            this.error("Expected token '>'");
+        }
+
+        const bt = this.type();
+
+        return new GenericTypeNode(tp, bt);
+    }
+
+    private type_parameters(): TypeParameterNode[] {
+        const params: TypeParameterNode[] = [];
+        do {
+            if (!this.match(TokenType.Identifier)) {
+                this.error("Expected an identifier.")
+            }
+
+            const name = this.previous().value;
+
+            let constraints: string[] = [];
+            if (this.match(TokenType.Colon)) {
+                do {
+                    if (!this.match(TokenType.Identifier)) {
+                        this.error("Expected an identifier");
+                    }
+
+                    constraints.push(this.previous().value);
+
+                } while (this.match(TokenType.Plus))
+            }
+
+            params.push(new TypeParameterNode(name, constraints));
+        } while (this.match(TokenType.Comma));
+
+        return params;
+    }
+
+    private primitive(): ASTNode | null {
+        if (this.match(TokenType.Identifier)) {
+            return new TypeNode(this.previous().value);
+        }
+
+        return null;
+    }
+
+    private array_type(): ASTNode | null {
+        const value = this.peek().value;
+
+        if (value === "array") {
+            this.advance();
+            if (!this.match(TokenType.LT)) {
+                this.error("Expected <");
+            }
+
+            const type = this.type();
+
+            if (!this.match(TokenType.GT)) {
+                this.error("Expected >");
+            }
+
+
+            return new TypeNode("array", [type]);
+        }
+        return null;
+    }
+
+    private map_type(): ASTNode | null {
+        const value = this.peek().value;
+        if (value === "map") {
+            this.advance();
+            if (!this.match(TokenType.LT)) {
+                this.error("Expected <");
+            }
+            const keyType = this.type();
+            if (!this.match(TokenType.Comma)) {
+                this.error("Expected ,");
+            }
+            const valueType = this.type();
+            if (!this.match(TokenType.GT)) {
+                this.error("Expected >");
+            }
+            return new TypeNode("map", [keyType, valueType]);
+        }
+        return null;
+    }
+
+    private function_type(): ASTNode | null {
+        if (!this.match(TokenType.LeftParen)) {
+            return null;
+        }
+
+        const params = this.parameters_list();
+
+        if (!this.match(TokenType.RightParen)) {
+            this.error("Expected ')'");
+        }
+
+        if (!this.match(TokenType.Arrow)) {
+            this.error("Expected '->'");
+        }
+
+        const ret = this.type();
+
+        return new TypeNode("->", [params, ret]);
+    }
+
+    private struct_type() {
+        if (!this.match(TokenType.Struct)) {
+            return null;
+        }
+
+        if (!this.match(TokenType.Identifier)) {
+            this.error("Expected a name for struct");
+        }
+
+        const name = this.previous().value;
+        const typeParams: ASTNode[] = [];
+
+        if (this.match(TokenType.LT)) {
+
+            do {
+                const typeParam = this.type();
+                if (!typeParam) {
+                    this.error("Expected a valid type parameter");
+                }
+                typeParams.push(typeParam);
+            } while (this.match(TokenType.Comma));
+
+            if (!this.match(TokenType.GT)) {
+                this.error("Expected token '>'");
+            }
+        }
+
+        return new TypeNode("struct", [name, ...typeParams])
+    }
+
+    private struct_statement(): StructNode {
+        if (!this.match(TokenType.Struct)) {
+            this.error(`Expected token 'struct'`);
+        }
+
+        const name = this.peek().value;
+        this.advance();
+
+        let tp: TypeParameterNode[] | undefined = undefined;
+
+        if (this.match(TokenType.LT)) {
+            tp = this.type_parameters();
+
+            if (!this.match(TokenType.GT)) {
+                this.error(`Expected token '>'`);
+            }
+        }
+
+        if (!this.match(TokenType.LeftBrace)) {
+            this.error(`Expected token '{'`)
+        }
+
+        let body = this.field_list();
+
+        if (!this.match(TokenType.RightBrace)) {
+            this.error(`Expected token '}'`)
+        }
+
+        if (this.match(TokenType.SemiColon)) { }
+
+        return new StructNode(name, body, tp);
+    }
+
+    private field_list(): FieldNode[] {
+        const fields: FieldNode[] = [];
+
+        while (!this.check(TokenType.RightBrace)) {
+            const identifier = this.identifier();
+
+            fields.push(new FieldNode(identifier));
+
+            if (!this.match(TokenType.SemiColon)) {
+                this.error(`Expected ';' after field declaration`);
+            }
+        }
+
+        return fields;
     }
 }

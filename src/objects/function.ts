@@ -1,4 +1,4 @@
-import { ASTNode, FunctionDecNode } from "../ast";
+import { ASTNode, FunctionDecNode } from "../parser/ast";
 import { Type } from "./base";
 
 export class FunctionType extends Type<FunctionDecNode> {
