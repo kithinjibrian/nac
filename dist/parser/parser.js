@@ -7,7 +7,7 @@ class Parser {
     constructor(tokens) {
         this.tokens = [];
         this.current = 0;
-        this.tokens = tokens;
+        this.tokens = tokens.filter(token => token.type !== token_1.TokenType.Newline);
     }
     peek() {
         return this.tokens[this.current];
@@ -56,6 +56,9 @@ class Parser {
         if (this.peek().type == token_1.TokenType.Fun) {
             return this.function_dec();
         }
+        else if (this.peek().type == token_1.TokenType.Async) {
+            return this.async_function_dec();
+        }
         return this.statement();
     }
     function_dec() {
@@ -85,6 +88,38 @@ class Parser {
             this.error("Expected ')' after parameters");
         }
         return new ast_1.FunctionDecNode(functionName, parameters, this.block(), false, false, tp);
+    }
+    async_function_dec() {
+        if (!this.match(token_1.TokenType.Async)) {
+            this.error("Expected 'async' token");
+        }
+        const fun = this.function_dec();
+        fun.is_async = true;
+        return fun;
+    }
+    lambda_function() {
+        // Expect function name
+        if (!this.match(token_1.TokenType.Fun)) {
+            this.error("Expected 'fun' keyword name");
+        }
+        let tp = undefined;
+        if (this.match(token_1.TokenType.LT)) {
+            tp = this.type_parameters();
+            if (!this.match(token_1.TokenType.GT)) {
+                this.error("Expected token '>'");
+            }
+        }
+        // Expect opening parenthesis
+        if (!this.match(token_1.TokenType.LeftParen)) {
+            this.error("Expected '(' after function name");
+        }
+        // Parse parameters
+        let parameters = this.parameters_list();
+        // Expect closing parenthesis
+        if (!this.match(token_1.TokenType.RightParen)) {
+            this.error("Expected ')' after parameters");
+        }
+        return new ast_1.LambdaNode(parameters, this.block(), false, tp);
     }
     parameters_list() {
         if (this.peek().type == token_1.TokenType.RightParen) {
@@ -485,19 +520,17 @@ class Parser {
             type === token_1.TokenType.Modulo;
     }
     unary_expression() {
-        // if (this.match(TokenType.Increment, TokenType.Decrement)) {
-        //     const operator = this.previous().value;
-        //     const right = this.unary_expression();
-        //     return {
-        //         type: 'UnaryOp',
-        //         operator,
-        //         operand: right
-        //     } as ASTNode;
-        // }
         return this.postfix_expression();
     }
     postfix_expression() {
-        let expr = this.primary_expression();
+        let expr;
+        if (this.match(token_1.TokenType.Await)) {
+            const awaitedExpr = this.postfix_expression();
+            return new ast_1.AwaitExpressionNode(awaitedExpr);
+        }
+        else {
+            expr = this.primary_expression();
+        }
         while (true) {
             if (this.match(token_1.TokenType.LeftBracket)) {
                 // Array access: expr[index]
@@ -534,15 +567,6 @@ class Parser {
                 }
                 expr = new ast_1.ArrowExpressionNode(expr, new ast_1.IdentifierNode(this.previous().value));
             }
-            // else if (this.match(TokenType.Increment, TokenType.Decrement)) {
-            //     // Postfix increment/decrement: expr++ or expr--
-            //     expr = {
-            //         type: 'PostfixExpression',
-            //         operator: this.previous().value,
-            //         argument: expr,
-            //         prefix: false
-            //     } as ASTNode;
-            // }
             else {
                 break;
             }
@@ -551,10 +575,19 @@ class Parser {
     }
     primary_expression() {
         switch (this.peek().type) {
+            case token_1.TokenType.True:
+            case token_1.TokenType.False:
+                return this.boolean();
             case token_1.TokenType.Number:
                 return this.number();
             case token_1.TokenType.String:
                 return this.string();
+            case token_1.TokenType.LeftBracket:
+                return this.array();
+            case token_1.TokenType.LeftBrace:
+                return this.object();
+            case token_1.TokenType.Fun:
+                return this.lambda_function();
             case token_1.TokenType.Identifier: {
                 const iden = this.identifier();
                 if (this.peek().type == token_1.TokenType.LeftBrace) {
@@ -572,10 +605,6 @@ class Parser {
                     }
                     return expr;
                 }
-            case token_1.TokenType.LeftBracket:
-                return this.array();
-            case token_1.TokenType.LeftBrace:
-                return this.object();
         }
         return this.error('Unknown');
     }
@@ -584,6 +613,12 @@ class Parser {
             this.error("Expected a number");
         }
         return new ast_1.NumberNode(+this.previous().value);
+    }
+    boolean() {
+        if (!this.match(token_1.TokenType.True) && !this.match(token_1.TokenType.False)) {
+            this.error(`Expected a boolean`);
+        }
+        return new ast_1.BooleanNode(this.previous().type == token_1.TokenType.True);
     }
     string() {
         if (!this.match(token_1.TokenType.String)) {

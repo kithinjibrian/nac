@@ -1,4 +1,4 @@
-import { ArrayNode, ASTNode, ASTVisitor, BinaryOpNode, BlockNode, CallExpressionNode, ExpressionStatementNode, FieldNode, FunctionDecNode, GenericTypeNode, IdentifierNode, IfElseNode, MemberExpressionNode, NumberNode, ObjectNode, ParameterNode, ParametersListNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, StructNode, TypeNode, TypeParameterNode, VariableListNode, VariableNode } from "../parser/ast";
+import { ArrayNode, ASTNode, ASTVisitor, AwaitExpressionNode, BinaryOpNode, BlockNode, CallExpressionNode, ExpressionStatementNode, FieldNode, FunctionDecNode, GenericTypeNode, IdentifierNode, IfElseNode, MemberExpressionNode, NumberNode, ObjectNode, ParameterNode, ParametersListNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, StructNode, TypeNode, TypeParameterNode, VariableListNode, VariableNode } from "../parser/ast";
 import { Builtin } from "../phases/phases";
 import { Frame } from "../dsa/symtab";
 import { HM } from "./hm";
@@ -37,10 +37,11 @@ export declare class TypeChecker implements ASTVisitor {
     global: Frame;
     subst: Map<any, any>;
     constructor(opts?: Record<string, any>, primitives?: string[]);
-    run(ast: ASTNode, builtin: Record<string, Builtin>): void;
+    run(ast: ASTNode, builtin: Record<string, Builtin>): ASTNode;
+    _run(ast: ASTNode, builtin: Record<string, Builtin>): any;
     proc_builtin({ node }: {
         node: Builtin;
-    }): Types;
+    }): any;
     enter({ frame }: {
         frame: Frame;
     }): void;
@@ -49,7 +50,7 @@ export declare class TypeChecker implements ASTVisitor {
     private typeToString;
     before_accept(node: ASTNode): void;
     visitSourceElements(node: SourceElementsNode, args?: Record<string, any>): Types[];
-    visitExpressionStatement(node: ExpressionStatementNode, args?: Record<string, any>): void;
+    visitExpressionStatement(node: ExpressionStatementNode, args?: Record<string, any>): any;
     visitFunctionDec(node: FunctionDecNode, { frame }: {
         frame: Frame;
     }): Types;
@@ -74,6 +75,7 @@ export declare class TypeChecker implements ASTVisitor {
     visitBinaryOp(node: BinaryOpNode, { frame }: {
         frame: Frame;
     }): Types;
+    visitAwaitExpression(node: AwaitExpressionNode, args?: Record<string, any>): any;
     visitCallExpression(node: CallExpressionNode, args?: Record<string, any>): Types;
     visitMemberExpression(node: MemberExpressionNode, args?: Record<string, any>): Types | undefined;
     visitIdentifier(node: IdentifierNode, { frame }: {
@@ -104,7 +106,7 @@ export declare class TypeChecker implements ASTVisitor {
     visitField(node: FieldNode, args?: Record<string, any>): {
         magic: string;
         name: string;
-        type: void;
+        type: any;
     };
     visitNumber(node: NumberNode, { frame }: {
         frame: Frame;

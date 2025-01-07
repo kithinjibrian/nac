@@ -28,7 +28,9 @@ export class Phases {
     run(ast: ASTNode) {
         this.passes.forEach((pass) => {
             if (pass.run)
-                pass.run(ast, this.builtin);
+                ast = pass.run(ast, this.builtin);
         })
+
+        return ast;
     }
 }

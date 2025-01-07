@@ -74,6 +74,10 @@ class TypeChecker {
         Object.assign(this.hm.opts, opts);
     }
     run(ast, builtin) {
+        this._run(ast, builtin);
+        return ast;
+    }
+    _run(ast, builtin) {
         this.enter({ frame: this.global });
         Object.entries(builtin)
             .map(([key, value]) => {
@@ -95,7 +99,7 @@ class TypeChecker {
             const parser = new parser_1.Parser(tokens);
             const ast = parser.type();
             const tc = new TypeChecker();
-            const ty = tc.run(ast, {});
+            const ty = tc._run(ast, {});
             if (ty !== undefined) {
                 return ty;
             }
@@ -355,6 +359,9 @@ class TypeChecker {
             }
         }
         throw new Error(`Unsupported operator: ${node.operator}`);
+    }
+    visitAwaitExpression(node, args) {
+        return node.expression.accept(this, args);
     }
     visitCallExpression(node, args) {
         const callee = node.callee.accept(this, args);

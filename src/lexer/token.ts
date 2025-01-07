@@ -70,5 +70,8 @@ export enum TokenType {
     Struct = 'Struct',
     Export = 'Export',
     Import = 'Import',
-    Extends = 'Extends'
+    Extends = 'Extends',
+    Async = 'Async',
+    Await = 'Await',
+    Enum = 'Enum',
 }

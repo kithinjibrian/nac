@@ -21,6 +21,9 @@ const string_1 = require("../objects/string");
 const symtab_1 = require("../dsa/symtab");
 const event_1 = require("./event");
 const task_1 = require("./task");
+const future_1 = require("../objects/future");
+const null_1 = require("../objects/null");
+const lambda_1 = require("../objects/lambda");
 class Interpreter {
     constructor() {
         this.eventLoop = new event_1.EventLoop();
@@ -102,11 +105,13 @@ class Interpreter {
             }
             else {
                 if (fn.is_async) {
+                    const future = new future_1.FutureType(new null_1.NullType());
                     this.scheduleTask(fn.body, nf, (result) => {
                         if (result) {
-                            frame.stack.push(nf.return_value);
+                            future.complete(result);
                         }
                     });
+                    frame.stack.push(future);
                 }
                 else {
                     fn.body.accept(this, { frame: nf });
@@ -117,7 +122,7 @@ class Interpreter {
         });
     }
     before_accept(node) {
-        //  console.log(node.type);
+        console.log(node.type);
     }
     visitSourceElements(node, args) {
         for (const n of node.sources) {
@@ -129,6 +134,22 @@ class Interpreter {
     }
     visitFunctionDec(node, { frame }) {
         (0, symtab_1.set_symbol)(node.identifier, node, frame);
+    }
+    visitLambda(node, { frame }) {
+        frame.stack.push(new lambda_1.LambdaType(node));
+    }
+    visitAwaitExpression(node, { frame }) {
+        node.expression.accept(this, { frame });
+        const future = frame.stack.pop();
+        const task = new task_1.Task((frame) => {
+            frame.stack.push(future.getValue());
+        }, this, [frame]);
+        this.eventLoop.microtaskQueue.push(task);
+        this.eventLoop.run();
+        // console.log(task);
+    }
+    visitContinuation(node, { frame }) {
+        node.body.accept(this, { frame });
     }
     visitCallExpression(node, { frame }) {
         if (node.callee instanceof ast_1.IdentifierNode) {

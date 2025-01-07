@@ -16,4 +16,7 @@ export * from './lexer/lexer';
 export * from './lexer/token';
 export * from './parser/parser';
 export * from './phases/phases';
+export * from './builtin';
+export * from './CPS/cps';
+export * from './gen/js';
 //# sourceMappingURL=types.d.ts.map

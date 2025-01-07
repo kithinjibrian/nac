@@ -32,3 +32,6 @@ __exportStar(require("./lexer/lexer"), exports);
 __exportStar(require("./lexer/token"), exports);
 __exportStar(require("./parser/parser"), exports);
 __exportStar(require("./phases/phases"), exports);
+__exportStar(require("./builtin"), exports);
+__exportStar(require("./CPS/cps"), exports);
+__exportStar(require("./gen/js"), exports);

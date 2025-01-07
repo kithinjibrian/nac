@@ -1,4 +1,4 @@
-import { ArrayNode, ASTNode, ASTVisitor, BinaryOpNode, BlockNode, CallExpressionNode, ExpressionStatementNode, ForNode, FunctionDecNode, IdentifierNode, IfElseNode, MemberExpressionNode, NumberNode, ObjectNode, ParameterNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, VariableListNode, VariableNode, WhileNode } from "../parser/ast";
+import { ArrayNode, ASTNode, ASTVisitor, AwaitExpressionNode, BinaryOpNode, BlockNode, CallExpressionNode, ContinuationNode, ExpressionStatementNode, ForNode, FunctionDecNode, IdentifierNode, IfElseNode, LambdaNode, MemberExpressionNode, NumberNode, ObjectNode, ParameterNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, VariableListNode, VariableNode, WhileNode } from "../parser/ast";
 import { ArrayType } from "../objects/array";
 import { Type } from "../objects/base";
 import { BoolType } from "../objects/bool";
@@ -11,6 +11,9 @@ import { Builtin } from "../phases/phases";
 import { Frame, lookup_symbol, new_frame, set_symbol } from "../dsa/symtab";
 import { EventLoop } from "./event";
 import { Task } from "./task";
+import { FutureType } from "../objects/future";
+import { NullType } from "../objects/null";
+import { LambdaType } from "../objects/lambda";
 
 export class Interpreter implements ASTVisitor {
     public eventLoop: EventLoop = new EventLoop();
@@ -106,7 +109,7 @@ export class Interpreter implements ASTVisitor {
             let value;
             if (inbuilt.async) {
                 try {
-                    value = await inbuilt.exec(filtered)
+                    value = await inbuilt.exec(filtered);
                 } catch (e: any) {
                     throw new Error(e.message);
                 }
@@ -120,11 +123,14 @@ export class Interpreter implements ASTVisitor {
 
         } else {
             if (fn.is_async) {
+                const future = new FutureType(new NullType());
                 this.scheduleTask(fn.body, nf, (result) => {
                     if (result) {
-                        frame.stack.push(nf.return_value);
+                        future.complete(result);
                     }
                 })
+
+                frame.stack.push(future);
             } else {
                 fn.body.accept(this, { frame: nf });
                 if (nf.return_value)
@@ -134,7 +140,7 @@ export class Interpreter implements ASTVisitor {
     }
 
     before_accept(node: ASTNode) {
-        //  console.log(node.type);
+        console.log(node.type);
     }
 
     visitSourceElements(
@@ -155,6 +161,38 @@ export class Interpreter implements ASTVisitor {
         { frame }: { frame: Frame }
     ) {
         set_symbol(node.identifier, node, frame);
+    }
+
+    visitLambda(
+        node: LambdaNode,
+        { frame }: { frame: Frame }
+    ) {
+        frame.stack.push(new LambdaType(node));
+    }
+
+    visitAwaitExpression(
+        node: AwaitExpressionNode,
+        { frame }: { frame: Frame }
+    ) {
+        node.expression.accept(this, { frame });
+
+        const future = frame.stack.pop() as FutureType;
+
+        const task = new Task((frame: Frame) => {
+            frame.stack.push(future.getValue());
+        }, this, [frame]);
+
+        this.eventLoop.microtaskQueue.push(task);
+        this.eventLoop.run();
+
+        // console.log(task);
+    }
+
+    visitContinuation(
+        node: ContinuationNode,
+        { frame }: { frame: Frame }
+    ) {
+        node.body.accept(this, { frame })
     }
 
     visitCallExpression(
@@ -566,6 +604,4 @@ export class Interpreter implements ASTVisitor {
     ) {
         frame.stack.push(new NumberType(node.value));
     }
-
-
 }

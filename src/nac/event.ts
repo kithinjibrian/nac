@@ -3,7 +3,7 @@ import { Task } from "./task";
 export class EventLoop {
     constructor(
         public taskQueue: Task[] = [],
-        private microtaskQueue: Task[] = [],
+        public microtaskQueue: Task[] = [],
         public isRunning: boolean = false
     ) { }
 

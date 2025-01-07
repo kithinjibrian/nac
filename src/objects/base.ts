@@ -19,7 +19,7 @@ export interface Operations<T> {
 
 export abstract class Type<T> {
     public type: string;
-    protected readonly value: T;
+    protected value: T;
     protected readonly operations: Operations<T>;
 
     constructor(type: string, value: T, operations: Operations<T>) {

@@ -1,7 +1,7 @@
 import { Task } from "./task";
 export declare class EventLoop {
     taskQueue: Task[];
-    private microtaskQueue;
+    microtaskQueue: Task[];
     isRunning: boolean;
     constructor(taskQueue?: Task[], microtaskQueue?: Task[], isRunning?: boolean);
     enqueue(task: Task): void;

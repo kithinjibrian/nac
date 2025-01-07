@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FieldNode = exports.StructNode = exports.AssignmentNode = exports.GenericTypeNode = exports.TypeNode = exports.TypeParameterNode = exports.IdentifierNode = exports.PostfixExpressionNode = exports.ArrowExpressionNode = exports.CallExpressionNode = exports.MemberExpressionNode = exports.UnaryOpNode = exports.IfElseNode = exports.TertiaryExpressionNode = exports.BinaryOpNode = exports.PropertyNode = exports.StructDefNode = exports.ObjectNode = exports.ArrayNode = exports.StringNode = exports.NumberNode = exports.ExpressionNode = exports.ExpressionStatementNode = exports.VariableNode = exports.VariableListNode = exports.ReturnNode = exports.ParameterNode = exports.ParametersListNode = exports.FunctionDecNode = exports.ForNode = exports.WhileNode = exports.BlockNode = exports.SourceElementsNode = exports.ASTNodeBase = void 0;
+exports.FieldNode = exports.StructNode = exports.AssignmentNode = exports.GenericTypeNode = exports.TypeNode = exports.TypeParameterNode = exports.IdentifierNode = exports.PostfixExpressionNode = exports.ArrowExpressionNode = exports.CallExpressionNode = exports.AwaitExpressionNode = exports.MemberExpressionNode = exports.UnaryOpNode = exports.IfElseNode = exports.TertiaryExpressionNode = exports.BinaryOpNode = exports.PropertyNode = exports.StructDefNode = exports.ObjectNode = exports.ArrayNode = exports.StringNode = exports.BooleanNode = exports.NumberNode = exports.ExpressionNode = exports.ExpressionStatementNode = exports.VariableNode = exports.VariableListNode = exports.ReturnNode = exports.ParameterNode = exports.ParametersListNode = exports.LambdaNode = exports.FunctionDecNode = exports.ContinuationNode = exports.ForNode = exports.WhileNode = exports.BlockNode = exports.SourceElementsNode = exports.ASTNodeBase = void 0;
 class ASTNodeBase {
     accept(visitor, args) {
         var _a, _b;
@@ -63,6 +63,19 @@ class ForNode extends ASTNodeBase {
     }
 }
 exports.ForNode = ForNode;
+class ContinuationNode extends ASTNodeBase {
+    constructor(params, body) {
+        super();
+        this.params = params;
+        this.body = body;
+        this.type = "Continuation";
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitContinuation) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.ContinuationNode = ContinuationNode;
 class FunctionDecNode extends ASTNodeBase {
     constructor(identifier, params, body, inbuilt = false, is_async = false, type_parameters) {
         super();
@@ -80,6 +93,21 @@ class FunctionDecNode extends ASTNodeBase {
     }
 }
 exports.FunctionDecNode = FunctionDecNode;
+class LambdaNode extends ASTNodeBase {
+    constructor(params, body, is_async = false, type_parameters) {
+        super();
+        this.params = params;
+        this.body = body;
+        this.is_async = is_async;
+        this.type_parameters = type_parameters;
+        this.type = 'Lambda';
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitLambda) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.LambdaNode = LambdaNode;
 class ParametersListNode extends ASTNodeBase {
     constructor(parameters) {
         super();
@@ -182,6 +210,18 @@ class NumberNode extends ASTNodeBase {
     }
 }
 exports.NumberNode = NumberNode;
+class BooleanNode extends ASTNodeBase {
+    constructor(value) {
+        super();
+        this.value = value;
+        this.type = 'Boolean';
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitBoolean) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.BooleanNode = BooleanNode;
 class StringNode extends ASTNodeBase {
     constructor(value) {
         super();
@@ -313,6 +353,18 @@ class MemberExpressionNode extends ASTNodeBase {
     }
 }
 exports.MemberExpressionNode = MemberExpressionNode;
+class AwaitExpressionNode extends ASTNodeBase {
+    constructor(expression) {
+        super();
+        this.expression = expression;
+        this.type = 'AwaitExpression';
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitAwaitExpression) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.AwaitExpressionNode = AwaitExpressionNode;
 class CallExpressionNode extends ASTNodeBase {
     constructor(callee, args) {
         super();

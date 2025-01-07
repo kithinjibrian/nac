@@ -5,7 +5,7 @@ class HM {
     constructor(constraints = []) {
         this.constraints = constraints;
         this.opts = {
-            unifyTVars: false
+            unifyTVars: true
         };
     }
     typeToString(type) {
@@ -25,8 +25,9 @@ class HM {
                 }
                 return name;
             }
-            default:
-                throw new Error(`Unsupported type tag: ${type.tag}`);
+            case "TRec": {
+                return type.trec.name;
+            }
         }
     }
     constraint_eq(left, right) {

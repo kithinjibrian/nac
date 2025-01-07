@@ -75,4 +75,6 @@ var TokenType;
     TokenType["Export"] = "Export";
     TokenType["Import"] = "Import";
     TokenType["Extends"] = "Extends";
+    TokenType["Async"] = "Async";
+    TokenType["Await"] = "Await";
 })(TokenType || (exports.TokenType = TokenType = {}));

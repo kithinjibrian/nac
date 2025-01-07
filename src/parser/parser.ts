@@ -29,6 +29,15 @@ import {
     StructNode,
     FieldNode,
     StructDefNode,
+    AwaitExpressionNode,
+    LambdaNode,
+    BooleanNode,
+    EnumNode,
+    EnumVariantNode,
+    EnumVariantValueNode,
+    StructVariantNode,
+    TupleVariantNode,
+    ConstantVariantNode,
 } from "./ast";
 
 import { Token } from "../lexer/lexer";
@@ -39,7 +48,7 @@ export class Parser {
     private current: number = 0;
 
     constructor(tokens: Token[]) {
-        this.tokens = tokens;
+        this.tokens = tokens.filter(token => token.type !== TokenType.Newline);
     }
 
     private peek(): Token {
@@ -97,6 +106,8 @@ export class Parser {
     private source_element(): ASTNode {
         if (this.peek().type == TokenType.Fun) {
             return this.function_dec()
+        } else if (this.peek().type == TokenType.Async) {
+            return this.async_function_dec();
         }
 
         return this.statement();
@@ -136,13 +147,82 @@ export class Parser {
             this.error("Expected ')' after parameters");
         }
 
+        let rt: ASTNode | undefined = undefined;
+
+        if (this.match(TokenType.Colon)) {
+            rt = this.type();
+        }
+
         return new FunctionDecNode(
             functionName,
             parameters,
             this.block(),
             false,
             false,
-            tp
+            tp,
+            rt
+        );
+    }
+
+    private async_function_dec() {
+        if (!this.match(TokenType.Async)) {
+            this.error("Expected 'async' token");
+        }
+
+        const fun = this.function_dec();
+        fun.is_async = true;
+
+        return fun;
+    }
+
+    private lambda_function() {
+        // Expect function name
+        if (!this.match(TokenType.Fun)) {
+            this.error("Expected 'fun' keyword name");
+        }
+
+        let tp: TypeParameterNode[] | undefined = undefined;
+
+        if (this.match(TokenType.LT)) {
+            tp = this.type_parameters();
+
+            if (!this.match(TokenType.GT)) {
+                this.error("Expected token '>'")
+            }
+        }
+
+        // Expect opening parenthesis
+        if (!this.match(TokenType.LeftParen)) {
+            this.error("Expected '(' after function name");
+        }
+
+        // Parse parameters
+        let parameters = this.parameters_list();
+
+        // Expect closing parenthesis
+        if (!this.match(TokenType.RightParen)) {
+            this.error("Expected ')' after parameters");
+        }
+
+        let rt: ASTNode | undefined = undefined;
+
+        if (this.match(TokenType.Colon)) {
+            rt = this.type();
+        }
+
+        // let body = undefined;
+        // if (this.peek().type == TokenType.LeftBrace) {
+        //     body = ;
+        // } else if (this.match(TokenType.Arrow)) {
+        //     body = this.expression()
+        // }
+
+        return new LambdaNode(
+            parameters,
+            this.block(),
+            false,
+            tp,
+            rt
         );
     }
 
@@ -196,6 +276,8 @@ export class Parser {
                 return this.if_statement();
             case TokenType.Struct:
                 return this.struct_statement();
+            case TokenType.Enum:
+                return this.enum_statement();
             case TokenType.Let:
                 {
                     const node = this.variable_statement();
@@ -667,21 +749,18 @@ export class Parser {
     }
 
     private unary_expression(): ASTNode {
-        // if (this.match(TokenType.Increment, TokenType.Decrement)) {
-        //     const operator = this.previous().value;
-        //     const right = this.unary_expression();
-        //     return {
-        //         type: 'UnaryOp',
-        //         operator,
-        //         operand: right
-        //     } as ASTNode;
-        // }
-
         return this.postfix_expression();
     }
 
     private postfix_expression(): ASTNode {
-        let expr = this.primary_expression();
+
+        let expr: ASTNode;
+        if (this.match(TokenType.Await)) {
+            const awaitedExpr = this.postfix_expression();
+            return new AwaitExpressionNode(awaitedExpr);
+        } else {
+            expr = this.primary_expression();
+        }
 
         while (true) {
             if (this.match(TokenType.LeftBracket)) {
@@ -730,15 +809,6 @@ export class Parser {
                     new IdentifierNode(this.previous().value)
                 )
             }
-            // else if (this.match(TokenType.Increment, TokenType.Decrement)) {
-            //     // Postfix increment/decrement: expr++ or expr--
-            //     expr = {
-            //         type: 'PostfixExpression',
-            //         operator: this.previous().value,
-            //         argument: expr,
-            //         prefix: false
-            //     } as ASTNode;
-            // }
             else {
                 break;
             }
@@ -749,10 +819,17 @@ export class Parser {
 
     private primary_expression(): ASTNode {
         switch (this.peek().type) {
+            case TokenType.True:
+            case TokenType.False:
             case TokenType.Number:
-                return this.number();
             case TokenType.String:
-                return this.string();
+                return this.constants();
+            case TokenType.LeftBracket:
+                return this.array();
+            case TokenType.LeftBrace:
+                return this.object();
+            case TokenType.Fun:
+                return this.lambda_function();
             case TokenType.Identifier: {
                 const iden = this.identifier();
                 if (this.peek().type == TokenType.LeftBrace) {
@@ -772,13 +849,23 @@ export class Parser {
 
                     return expr;
                 }
-            case TokenType.LeftBracket:
-                return this.array();
-            case TokenType.LeftBrace:
-                return this.object();
         }
 
         return this.error('Unknown');
+    }
+
+    private constants() {
+        switch (this.peek().type) {
+            case TokenType.True:
+            case TokenType.False:
+                return this.boolean();
+            case TokenType.Number:
+                return this.number();
+            case TokenType.String:
+                return this.string();
+        }
+
+        this.error('Unknown');
     }
 
     private number(): NumberNode {
@@ -787,6 +874,14 @@ export class Parser {
         }
 
         return new NumberNode(+this.previous().value);
+    }
+
+    private boolean(): BooleanNode {
+        if (!this.match(TokenType.True) && !this.match(TokenType.False)) {
+            this.error(`Expected a boolean`);
+        }
+
+        return new BooleanNode(this.previous().type == TokenType.True);
     }
 
     private string(): StringNode {
@@ -827,7 +922,10 @@ export class Parser {
         if (!this.check(TokenType.RightBrace)) {
             do {
                 properties.push(this.property_definition());
-            } while (this.match(TokenType.Comma));
+            } while (
+                this.match(TokenType.Comma) &&
+                !this.check(TokenType.RightBrace)
+            );
         }
 
         if (!this.match(TokenType.RightBrace)) {
@@ -843,6 +941,9 @@ export class Parser {
             case TokenType.String:
             case TokenType.Identifier: {
                 key = this.peek().value;
+                if (!/^[a-zA-Z]+$/.test(key)) {
+                    key = `'${key.replace(/'/g, "\\'")}'`;
+                }
                 this.advance();
                 break;
             }
@@ -883,9 +984,13 @@ export class Parser {
             return type;
         } else if ((type = this.map_type())) {
             return type;
+        } else if ((type = this.promise_type())) {
+            return type;
         } else if ((type = this.function_type())) {
             return type;
         } else if ((type = this.struct_type())) {
+            return type;
+        } else if ((type = this.enum_type())) {
             return type;
         } else if ((type = this.primitive())) {
             return type;
@@ -952,7 +1057,7 @@ export class Parser {
     private array_type(): ASTNode | null {
         const value = this.peek().value;
 
-        if (value === "array") {
+        if (value === "Array") {
             this.advance();
             if (!this.match(TokenType.LT)) {
                 this.error("Expected <");
@@ -965,14 +1070,35 @@ export class Parser {
             }
 
 
-            return new TypeNode("array", [type]);
+            return new TypeNode("Array", [type]);
+        }
+        return null;
+    }
+
+    private promise_type(): ASTNode | null {
+        const value = this.peek().value;
+
+        if (value === "Promise") {
+            this.advance();
+            if (!this.match(TokenType.LT)) {
+                this.error("Expected <");
+            }
+
+            const type = this.type();
+
+            if (!this.match(TokenType.GT)) {
+                this.error("Expected >");
+            }
+
+
+            return new TypeNode("Promise", [type]);
         }
         return null;
     }
 
     private map_type(): ASTNode | null {
         const value = this.peek().value;
-        if (value === "map") {
+        if (value === "Map") {
             this.advance();
             if (!this.match(TokenType.LT)) {
                 this.error("Expected <");
@@ -985,7 +1111,7 @@ export class Parser {
             if (!this.match(TokenType.GT)) {
                 this.error("Expected >");
             }
-            return new TypeNode("map", [keyType, valueType]);
+            return new TypeNode("Map", [keyType, valueType]);
         }
         return null;
     }
@@ -1040,6 +1166,36 @@ export class Parser {
         return new TypeNode("struct", [name, ...typeParams])
     }
 
+    private enum_type() {
+        if (!this.match(TokenType.Enum)) {
+            return null;
+        }
+
+        if (!this.match(TokenType.Identifier)) {
+            this.error("Expected a name for enum");
+        }
+
+        const name = this.previous().value;
+        const typeParams: ASTNode[] = [];
+
+        if (this.match(TokenType.LT)) {
+
+            do {
+                const typeParam = this.type();
+                if (!typeParam) {
+                    this.error("Expected a valid type parameter");
+                }
+                typeParams.push(typeParam);
+            } while (this.match(TokenType.Comma));
+
+            if (!this.match(TokenType.GT)) {
+                this.error("Expected token '>'");
+            }
+        }
+
+        return new TypeNode("enum", [name, ...typeParams])
+    }
+
     private struct_statement(): StructNode {
         if (!this.match(TokenType.Struct)) {
             this.error(`Expected token 'struct'`);
@@ -1081,11 +1237,97 @@ export class Parser {
 
             fields.push(new FieldNode(identifier));
 
-            if (!this.match(TokenType.SemiColon)) {
-                this.error(`Expected ';' after field declaration`);
+            if (!this.match(TokenType.Comma)) {
+                if (!this.check(TokenType.RightBrace)) {
+                    this.error(`Expected ',' after field declaration`);
+                }
             }
         }
 
         return fields;
+    }
+
+    private enum_statement(): EnumNode {
+        if (!this.match(TokenType.Enum)) {
+            this.error(`Expected token 'enum'`);
+        }
+
+        const name = this.peek().value;
+        this.advance();
+
+        let tp: TypeParameterNode[] | undefined = undefined;
+
+        if (this.match(TokenType.LT)) {
+            tp = this.type_parameters();
+
+            if (!this.match(TokenType.GT)) {
+                this.error(`Expected token '>'`);
+            }
+        }
+
+        if (!this.match(TokenType.LeftBrace)) {
+            this.error(`Expected token '{'`)
+        }
+
+        let body = this.enum_body();
+
+        if (!this.match(TokenType.RightBrace)) {
+            this.error(`Expected token '}'`)
+        }
+
+        if (this.match(TokenType.SemiColon)) { }
+
+        return new EnumNode(name, body, tp);
+    }
+
+    private enum_body(): EnumVariantNode[] {
+        const variants: EnumVariantNode[] = [];
+
+        while (!this.check(TokenType.RightBrace)) {
+            if (!this.match(TokenType.Identifier)) {
+                this.error(`Expected an identifier`);
+            }
+
+            const name = this.previous().value;
+
+            let value: EnumVariantValueNode | undefined = undefined;
+
+            if (this.match(TokenType.LeftBrace)) {
+                value = new StructVariantNode(this.field_list());
+
+                if (!this.match(TokenType.RightBrace)) {
+                    this.error(`Expected '}' to close struct variant`);
+                }
+
+            } else if (this.match(TokenType.LeftParen)) {
+                value = new TupleVariantNode(this.tuple_payload());
+
+                if (!this.match(TokenType.RightParen)) {
+                    this.error(`Expected ')' to close tuple variant`);
+                }
+            } else if (this.match(TokenType.Equals)) {
+                value = new ConstantVariantNode(this.constants());
+            }
+
+            variants.push(new EnumVariantNode(name, value));
+
+            if (!this.match(TokenType.Comma)) {
+                if (!this.check(TokenType.RightBrace)) {
+                    this.error(`Expected ',' after enum variant`);
+                }
+            }
+        }
+
+        return variants;
+    }
+
+    private tuple_payload(): ASTNode[] {
+        const types: ASTNode[] = [];
+
+        do {
+            types.push(this.type());
+        } while (this.match(TokenType.Comma));
+
+        return types;
     }
 }

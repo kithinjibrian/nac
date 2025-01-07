@@ -1,27 +1,16 @@
+import { ISOVM } from "./iso-vm/gen";
 import {
+    builtin,
     Builtin,
-    Interpreter,
+    JS,
     Lexer,
     Parser,
     Phases,
-    Type,
+    SEMA,
     TypeChecker
 } from "./types";
 
 export * from "./types";
-
-export const builtin: Record<string, Builtin> = {
-    print: {
-        type: "function",
-        signature: "<T>(args: T) -> integer",
-        filter: (args: Type<any>[]) => {
-            return args.map(i => i.str())
-        },
-        exec: (args: any[]) => {
-            console.log(args.join(" "))
-        }
-    }
-}
 
 export class Nac {
     constructor(
@@ -31,32 +20,48 @@ export class Nac {
     ) {
         const _passes = new Phases(
             passes ?? [
-                new TypeChecker(),
-                new Interpreter()
+                new SEMA(),
+                new TypeChecker()
             ],
             builtin
         );
 
-        const lexer = new Lexer(code);
+        const n = `
+        struct Result<T> {
+            tag: string,
+            data: T
+        };
+
+        fun fetch(url, opts): struct Result {
+            return fetchJS(url, opts);
+        }
+
+        ${code}
+        `;
+
+        const lexer = new Lexer(n);
         const tokens = lexer.tokenize();
         const parser = new Parser(tokens);
         const ast = parser.parse();
 
         _passes.run(ast);
+
+        new JS(builtin)
+            .plugin(new ISOVM())
+            .run(ast, {
+                target: "isolate-vm",
+                main: "main",
+                args: []
+            }).runJS()
     }
 }
 
-// new Nac(
-//     `
-//     struct User {
-//         name: string;
-//     }
-
-//     let a = User {
-//         name: "kithinji"
-//     };
-
-//     print(a.name);
-//     `,
-//     builtin
-// )
+new Nac(
+    `
+    fun main() {
+        let a = fetch("https://api.dafifi.net", { method: "GET"});
+        return a;
+    }
+    `,
+    builtin
+)

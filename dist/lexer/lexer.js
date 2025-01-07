@@ -207,18 +207,19 @@ class Lexer {
         if (this.peek() === '/') {
             const nextChar = this.peek(1);
             if (nextChar === '/') {
-                while (this.peek() !== '\n' && this.peek() !== '\0') {
+                while (this.peek() !== '\n' &&
+                    this.peek() !== '\0') {
                     this.advance();
                 }
             }
             else if (nextChar === '*') {
-                this.advance(); // Skip '/'
-                this.advance(); // Skip '*'
+                this.advance();
+                this.advance();
                 while (!(this.peek() === '*' && this.peek(1) === '/') && this.peek() !== '\0') {
                     this.advance();
                 }
-                this.advance(); // Skip '*'
-                this.advance(); // Skip '/'
+                this.advance();
+                this.advance();
             }
         }
     }
@@ -261,7 +262,9 @@ class Lexer {
             ["import", token_1.TokenType.Import],
             ["true", token_1.TokenType.True],
             ["false", token_1.TokenType.False],
-            ["extends", token_1.TokenType.Extends]
+            ["extends", token_1.TokenType.Extends],
+            ["async", token_1.TokenType.Async],
+            ["await", token_1.TokenType.Await]
         ]);
         return {
             type: keywords.get(value) || token_1.TokenType.Identifier,

@@ -12,7 +12,7 @@ class Phases {
     run(ast) {
         this.passes.forEach((pass) => {
             if (pass.run)
-                pass.run(ast, this.builtin);
+                ast = pass.run(ast, this.builtin);
         });
     }
 }

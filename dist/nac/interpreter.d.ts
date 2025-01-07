@@ -1,4 +1,4 @@
-import { ArrayNode, ASTNode, ASTVisitor, BinaryOpNode, BlockNode, CallExpressionNode, ExpressionStatementNode, ForNode, FunctionDecNode, IdentifierNode, IfElseNode, MemberExpressionNode, NumberNode, ObjectNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, VariableListNode, VariableNode, WhileNode } from "../parser/ast";
+import { ArrayNode, ASTNode, ASTVisitor, AwaitExpressionNode, BinaryOpNode, BlockNode, CallExpressionNode, ContinuationNode, ExpressionStatementNode, ForNode, FunctionDecNode, IdentifierNode, IfElseNode, LambdaNode, MemberExpressionNode, NumberNode, ObjectNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, VariableListNode, VariableNode, WhileNode } from "../parser/ast";
 import { Builtin } from "../phases/phases";
 import { Frame } from "../dsa/symtab";
 import { EventLoop } from "./event";
@@ -14,6 +14,15 @@ export declare class Interpreter implements ASTVisitor {
     visitSourceElements(node: SourceElementsNode, args?: Record<string, any>): void;
     visitExpressionStatement(node: ExpressionStatementNode, args?: Record<string, any>): void;
     visitFunctionDec(node: FunctionDecNode, { frame }: {
+        frame: Frame;
+    }): void;
+    visitLambda(node: LambdaNode, { frame }: {
+        frame: Frame;
+    }): void;
+    visitAwaitExpression(node: AwaitExpressionNode, { frame }: {
+        frame: Frame;
+    }): void;
+    visitContinuation(node: ContinuationNode, { frame }: {
         frame: Frame;
     }): void;
     visitCallExpression(node: CallExpressionNode, { frame }: {

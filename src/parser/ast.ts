@@ -1,13 +1,16 @@
 export interface ASTVisitor {
-    before_accept?(node: ASTNode): any;
-    after_accept?(node: ASTNode): any;
+    before_accept?(node: ASTNode, args?: Record<string, any>): any;
+    after_accept?(node: ASTNode, args?: Record<string, any>): any;
     visitNumber?(node: NumberNode, args?: Record<string, any>): any;
+    visitBoolean?(node: BooleanNode, args?: Record<string, any>): any;
     visitString?(node: StringNode, args?: Record<string, any>): any;
     visitSourceElements?(node: SourceElementsNode, args?: Record<string, any>): any;
     visitBlock?(node: BlockNode, args?: Record<string, any>): any;
     visitWhile?(node: WhileNode, args?: Record<string, any>): any;
     visitFor?(node: ForNode, args?: Record<string, any>): any;
     visitFunctionDec?(node: FunctionDecNode, args?: Record<string, any>): any;
+    visitLambda?(node: LambdaNode, args?: Record<string, any>): any;
+    visitContinuation?(node: ContinuationNode, args?: Record<string, any>): any;
     visitParametersList?(node: ParametersListNode, args?: Record<string, any>): any;
     visitParameter?(node: ParameterNode, args?: Record<string, any>): any;
     visitReturn?(node: ReturnNode, args?: Record<string, any>): any;
@@ -28,6 +31,7 @@ export interface ASTVisitor {
     visitIfElse?(node: IfElseNode, args?: Record<string, any>): any;
     visitUnaryOp?(node: UnaryOpNode, args?: Record<string, any>): any;
     visitMemberExpression?(node: MemberExpressionNode, args?: Record<string, any>): any;
+    visitAwaitExpression?(node: AwaitExpressionNode, args?: Record<string, any>): any;
     visitCallExpression?(node: CallExpressionNode, args?: Record<string, any>): any;
     visitArrowExpression?(node: ArrowExpressionNode, args?: Record<string, any>): any;
     visitPostfixExpression?(node: PostfixExpressionNode, args?: Record<string, any>): any;
@@ -38,21 +42,26 @@ export interface ASTVisitor {
     visitGenericType?(node: GenericTypeNode, args?: Record<string, any>): any;
     visitStruct?(node: StructNode, args?: Record<string, any>): any;
     visitField?(node: FieldNode, args?: Record<string, any>): any;
+    visitEnum?(node: EnumNode, args?: Record<string, any>): any;
+    visitEnumVariant?(node: EnumVariantNode, args?: Record<string, any>): any;
+    visitStructVariant?(node: StructVariantNode, args?: Record<string, any>): any;
+    visitTupleVariant?(node: TupleVariantNode, args?: Record<string, any>): any;
+    visitConstantVariant?(node: ConstantVariantNode, args?: Record<string, any>): any;
 }
 
 
 export interface ASTNode {
     type: string;
-    accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+    accept(visitor: ASTVisitor, args?: Record<string, any>): any;
 }
 
 export abstract class ASTNodeBase implements ASTNode {
     abstract type: string;
 
     accept(visitor: ASTVisitor, args?: Record<string, any>) {
-        visitor.before_accept?.(this);
+        visitor.before_accept?.(this, args);
         const res = this._accept(visitor, args);
-        visitor.after_accept?.(this);
+        visitor.after_accept?.(this, args);
 
         return res;
     }
@@ -113,6 +122,24 @@ export class ForNode extends ASTNodeBase {
     }
 }
 
+export class ContinuationNode extends ASTNodeBase {
+    type = "Continuation";
+
+    constructor(
+        public params: any[],
+        public body: ASTNode
+    ) {
+        super();
+    }
+
+    _accept(
+        visitor: ASTVisitor,
+        args?: Record<string, any>
+    ): void {
+        return visitor.visitContinuation?.(this, args);
+    }
+}
+
 export class FunctionDecNode extends ASTNodeBase {
     type = 'FunctionDec';
 
@@ -122,13 +149,32 @@ export class FunctionDecNode extends ASTNodeBase {
         public body: BlockNode,
         public inbuilt: boolean = false,
         public is_async: boolean = false,
-        public type_parameters?: TypeParameterNode[]
+        public type_parameters?: TypeParameterNode[],
+        public return_type?: ASTNode
     ) {
         super();
     }
 
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
         return visitor.visitFunctionDec?.(this, args);
+    }
+}
+
+export class LambdaNode extends ASTNodeBase {
+    type = 'Lambda';
+
+    constructor(
+        public params: ParametersListNode | undefined,
+        public body: ASTNode,
+        public is_async: boolean = false,
+        public type_parameters?: TypeParameterNode[],
+        public return_type?: ASTNode
+    ) {
+        super();
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitLambda?.(this, args);
     }
 }
 
@@ -235,6 +281,18 @@ export class NumberNode extends ASTNodeBase {
 
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
         return visitor.visitNumber?.(this, args);
+    }
+}
+
+export class BooleanNode extends ASTNodeBase {
+    type = 'Boolean';
+
+    constructor(public value: boolean) {
+        super();
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitBoolean?.(this, args);
     }
 }
 
@@ -377,6 +435,20 @@ export class MemberExpressionNode extends ASTNodeBase {
     }
 }
 
+export class AwaitExpressionNode extends ASTNodeBase {
+    type = 'AwaitExpression';
+
+    constructor(
+        public expression: ASTNode,
+    ) {
+        super();
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitAwaitExpression?.(this, args);
+    }
+}
+
 export class CallExpressionNode extends ASTNodeBase {
     type = 'CallExpression';
 
@@ -510,5 +582,76 @@ export class FieldNode extends ASTNodeBase {
 
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
         return visitor.visitField?.(this, args);
+    }
+}
+
+export class EnumNode extends ASTNodeBase {
+    type = "Enum";
+
+    constructor(
+        public name: string,
+        public body: EnumVariantNode[],
+        public type_parameters?: TypeParameterNode[]
+
+    ) {
+        super();
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitEnum?.(this, args);
+    }
+}
+
+export type EnumVariantValueNode = StructVariantNode | TupleVariantNode | ConstantVariantNode;
+
+export class EnumVariantNode extends ASTNodeBase {
+    type = "EnumVariant";
+
+    constructor(
+        public name: string,
+        public value?: EnumVariantValueNode
+
+    ) {
+        super();
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitEnumVariant?.(this, args);
+    }
+}
+
+export class StructVariantNode extends ASTNodeBase {
+    type = "StructVariant"
+
+    constructor(public fields: FieldNode[]) {
+        super()
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitStructVariant?.(this, args);
+    }
+}
+
+export class TupleVariantNode extends ASTNodeBase {
+    type = "TupleVariant"
+
+    constructor(public types: ASTNode[]) {
+        super();
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitTupleVariant?.(this, args);
+    }
+}
+
+export class ConstantVariantNode extends ASTNodeBase {
+    type = "ConstantVariant"
+
+    constructor(public types: ASTNode) {
+        super();
+    }
+
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void {
+        return visitor.visitConstantVariant?.(this, args);
     }
 }

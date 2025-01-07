@@ -2,12 +2,15 @@ export interface ASTVisitor {
     before_accept?(node: ASTNode): any;
     after_accept?(node: ASTNode): any;
     visitNumber?(node: NumberNode, args?: Record<string, any>): any;
+    visitBoolean?(node: BooleanNode, args?: Record<string, any>): any;
     visitString?(node: StringNode, args?: Record<string, any>): any;
     visitSourceElements?(node: SourceElementsNode, args?: Record<string, any>): any;
     visitBlock?(node: BlockNode, args?: Record<string, any>): any;
     visitWhile?(node: WhileNode, args?: Record<string, any>): any;
     visitFor?(node: ForNode, args?: Record<string, any>): any;
     visitFunctionDec?(node: FunctionDecNode, args?: Record<string, any>): any;
+    visitLambda?(node: LambdaNode, args?: Record<string, any>): any;
+    visitContinuation?(node: ContinuationNode, args?: Record<string, any>): any;
     visitParametersList?(node: ParametersListNode, args?: Record<string, any>): any;
     visitParameter?(node: ParameterNode, args?: Record<string, any>): any;
     visitReturn?(node: ReturnNode, args?: Record<string, any>): any;
@@ -28,6 +31,7 @@ export interface ASTVisitor {
     visitIfElse?(node: IfElseNode, args?: Record<string, any>): any;
     visitUnaryOp?(node: UnaryOpNode, args?: Record<string, any>): any;
     visitMemberExpression?(node: MemberExpressionNode, args?: Record<string, any>): any;
+    visitAwaitExpression?(node: AwaitExpressionNode, args?: Record<string, any>): any;
     visitCallExpression?(node: CallExpressionNode, args?: Record<string, any>): any;
     visitArrowExpression?(node: ArrowExpressionNode, args?: Record<string, any>): any;
     visitPostfixExpression?(node: PostfixExpressionNode, args?: Record<string, any>): any;
@@ -41,7 +45,7 @@ export interface ASTVisitor {
 }
 export interface ASTNode {
     type: string;
-    accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+    accept(visitor: ASTVisitor, args?: Record<string, any>): any;
 }
 export declare abstract class ASTNodeBase implements ASTNode {
     abstract type: string;
@@ -76,6 +80,13 @@ export declare class ForNode extends ASTNodeBase {
     constructor(init: ASTNode | undefined, condition: ASTNode | undefined, update: ASTNode | undefined, body: ASTNode);
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
 }
+export declare class ContinuationNode extends ASTNodeBase {
+    params: any[];
+    body: ASTNode;
+    type: string;
+    constructor(params: any[], body: ASTNode);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
 export declare class FunctionDecNode extends ASTNodeBase {
     identifier: string;
     params: ParametersListNode | undefined;
@@ -85,6 +96,15 @@ export declare class FunctionDecNode extends ASTNodeBase {
     type_parameters?: TypeParameterNode[] | undefined;
     type: string;
     constructor(identifier: string, params: ParametersListNode | undefined, body: BlockNode, inbuilt?: boolean, is_async?: boolean, type_parameters?: TypeParameterNode[] | undefined);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export declare class LambdaNode extends ASTNodeBase {
+    params: ParametersListNode | undefined;
+    body: BlockNode;
+    is_async: boolean;
+    type_parameters?: TypeParameterNode[] | undefined;
+    type: string;
+    constructor(params: ParametersListNode | undefined, body: BlockNode, is_async?: boolean, type_parameters?: TypeParameterNode[] | undefined);
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
 }
 export declare class ParametersListNode extends ASTNodeBase {
@@ -139,6 +159,12 @@ export declare class NumberNode extends ASTNodeBase {
     value: number;
     type: string;
     constructor(value: number);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export declare class BooleanNode extends ASTNodeBase {
+    value: boolean;
+    type: string;
+    constructor(value: boolean);
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
 }
 export declare class StringNode extends ASTNodeBase {
@@ -210,6 +236,12 @@ export declare class MemberExpressionNode extends ASTNodeBase {
     computed: boolean;
     type: string;
     constructor(object: ASTNode, property: ASTNode, computed: boolean);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export declare class AwaitExpressionNode extends ASTNodeBase {
+    expression: ASTNode;
+    type: string;
+    constructor(expression: ASTNode);
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
 }
 export declare class CallExpressionNode extends ASTNodeBase {

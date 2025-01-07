@@ -1,5 +1,43 @@
 import { TypeClass, Types } from "./type";
 
+declare global {
+    interface Set<T> {
+        addType(value: Types): Set<Types>;
+        hasType(value: Types): boolean;
+    }
+    interface Map<K, V> {
+        getType(key: Types): Types;
+        setType(key: Types, value: Types): Map<Types, Types>;
+    }
+}
+
+Set.prototype.hasType = function (value: Types) {
+    if (value.tag === "TVar") {
+        return [...this].some(item =>
+            item.tag === "TVar" && item.tvar === value.tvar
+        );
+    }
+    return this.has(value);
+};
+
+Map.prototype.setType = function (key: Types, value: Types) {
+    if (key.tag == "TVar") {
+        return this.set(key.tvar, value);
+    }
+
+    return this.set(key, value);
+}
+
+Map.prototype.getType = function (key: Types) {
+    if (key.tag == "TVar") {
+        return this.get(key.tvar);
+    }
+
+    return this.get(key);
+}
+
+type Scheme = { vars: Set<Types>; type: Types };
+
 export type Constraint =
     | {
         tag: "EQUALITY_CON";
@@ -23,9 +61,54 @@ export type Constraint =
         type_class: TypeClass
     }
 
+export function tcon(type: string): Types {
+    return {
+        tag: "TCon",
+        tcon: {
+            name: type,
+            types: [],
+            constraints: []
+        }
+    };
+}
+
+export function tfun(params: Types[], ret: Types): Types {
+    return {
+        tag: "TCon",
+        tcon: {
+            name: "->",
+            types: [...params, ret],
+            constraints: []
+        }
+    }
+}
+
+export function tcon_ex(name: string, types: Types[]): Types {
+    return {
+        tag: "TCon",
+        tcon: {
+            name: name,
+            types: types,
+            constraints: []
+        }
+    }
+}
+
+let counter = 0;
+
+export function tvar(
+    name?: string
+): Types {
+    return {
+        tag: "TVar",
+        tvar: name ?? `T${counter++}`,
+        constraints: []
+    };
+}
+
 export class HM {
     public opts: Record<string, any> = {
-        unifyTVars: false
+        unifyTVars: true
     };
 
     constructor(
@@ -51,10 +134,28 @@ export class HM {
 
                 return name;
             }
-            default:
-                throw new Error(`Unsupported type tag: ${type.tag}`);
+            case "TRec": {
+                return type.trec.name;
+            }
         }
     }
+
+    generalize(ctx: any, type: Types): Scheme {
+        const ctxVars = new Set();
+        for (const scheme of ctx.values()) {
+            for (const v of this.tvs(scheme.type)) ctxVars.add(v);
+        }
+        const vars = new Set(Array.from(this.tvs(type)).filter((v) => !ctxVars.has(v)));
+        return { vars, type };
+    }
+
+    instantiate(scheme: Scheme): Types | null {
+        const subst = new Map();
+        for (const v of scheme.vars) {
+            subst.set(v, tvar());
+        }
+        return this.apply(subst, scheme.type);
+    };
 
     constraint_eq(left: Types, right: Types) {
         this.constraints.push({
@@ -64,18 +165,22 @@ export class HM {
         });
     }
 
-    bind(a: Types, b: Types): Map<string, Types> | null {
-        const subst = new Map();
+    bind(a: Types, b: Types): Map<Types, Types> | null {
 
         if (a.tag === "TVar") {
-            subst.set(a.tvar, b);
+            if (b.tag === "TVar" && b.tvar == a.tvar) return new Map();
         }
-        return subst;
+
+        if (this.tvs(b).hasType(a)) {
+            throw new Error(`Occurs check fails: ${this.typeToString(a)} in ${this.typeToString(b)}`);
+        }
+
+        return new Map().setType(a, b);
     };
 
-    apply(subst: Map<string, Types>, type: Types): Types | null {
+    apply(subst: Map<Types, Types>, type: Types): Types | null {
         if (type.tag === "TVar") {
-            return subst.get(type.tvar) ?? type;
+            return subst.getType(type) ?? type;
         } else if (type.tag === "TCon") {
             return {
                 tag: "TCon",
@@ -107,7 +212,22 @@ export class HM {
         return null;
     };
 
-    compose(a: Map<string, Types>, b: Map<string, Types>) {
+    tvs(type: Types): Set<Types> {
+        switch (type.tag) {
+            case "TVar":
+                return new Set([type]);
+            case "TCon":
+                return new Set(
+                    type.tcon.types.flatMap(t => [...this.tvs(t)])
+                )
+            case "TRec":
+                return new Set(
+                    Object.values(type.trec.types).flatMap(t => [...this.tvs(t)])
+                );
+        }
+    }
+
+    compose(a: Map<Types, Types>, b: Map<Types, Types>) {
         const union = new Map([...a, ...b]);
         return new Map(
             Array.from(union).map(([key, value]) => [
@@ -141,14 +261,13 @@ export class HM {
         );
     }
 
-    unify(a: Types | null, b: Types | null): Map<string, Types> | null {
+    unify(a: Types | null, b: Types | null): Map<Types, Types> | null {
         if (a == null || b == null || a === b) return new Map();
 
         if (a.tag === "TVar" && b.tag === "TVar") {
             if (!this.opts.unifyTVars) {
                 throw new Error(`Can't unify two type variables!`);
             }
-
             const mergedConstraints = [...new Set([...a.constraints, ...b.constraints])];
             a.constraints = mergedConstraints;
             b.constraints = mergedConstraints;
@@ -161,7 +280,6 @@ export class HM {
             ) {
                 throw new Error(`Type '${this.typeToString(b)}' does not satisfy constraint ${a.constraints.map(i => `'${i.name}'`).join(", ")}`);
             }
-
             return this.bind(a, b);
         }
 
@@ -171,7 +289,6 @@ export class HM {
             ) {
                 throw new Error(`Type '${this.typeToString(a)}' does not satisfy constraint ${b.constraints.map(i => `'${i.name}'`).join(", ")}`);
             }
-
             return this.bind(b, a);
         }
 

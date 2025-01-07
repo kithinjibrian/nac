@@ -15,6 +15,8 @@ export declare class Parser {
     private source_elements;
     private source_element;
     private function_dec;
+    private async_function_dec;
+    private lambda_function;
     private parameters_list;
     private parameter;
     private statement;
@@ -52,6 +54,7 @@ export declare class Parser {
     private postfix_expression;
     private primary_expression;
     private number;
+    private boolean;
     private string;
     private array;
     private object;

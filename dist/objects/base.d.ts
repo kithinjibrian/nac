@@ -18,7 +18,7 @@ export interface Operations<T> {
 }
 export declare abstract class Type<T> {
     type: string;
-    protected readonly value: T;
+    protected value: T;
     protected readonly operations: Operations<T>;
     constructor(type: string, value: T, operations: Operations<T>);
     getType(): string;
