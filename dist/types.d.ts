@@ -19,4 +19,6 @@ export * from './phases/phases';
 export * from './builtin';
 export * from './CPS/cps';
 export * from './gen/js';
+export * from './sema/sema';
+export * from './iso-vm/gen';
 //# sourceMappingURL=types.d.ts.map

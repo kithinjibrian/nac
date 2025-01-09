@@ -12,6 +12,8 @@ import {
 
 export * from "./types";
 
+/*
+
 export class Nac {
     constructor(
         code: string,
@@ -56,12 +58,14 @@ export class Nac {
     }
 }
 
-new Nac(
-    `
-    fun main() {
-        let a = fetch("https://api.dafifi.net", { method: "GET"});
-        return a;
-    }
-    `,
-    builtin
-)
+// new Nac(
+//     `
+//     fun main() {
+//         let a = fetch("https://api.dafifi.net", { method: "GET"});
+//         return a;
+//     }
+//     `,
+//     builtin
+// )
+
+*/

@@ -228,7 +228,7 @@ export class TypeChecker implements ASTVisitor {
     }
 
     before_accept(node: ASTNode) {
-        console.log(node.type);
+        //console.log(node.type);
     }
 
     visitSourceElements(

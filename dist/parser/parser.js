@@ -87,7 +87,11 @@ class Parser {
         if (!this.match(token_1.TokenType.RightParen)) {
             this.error("Expected ')' after parameters");
         }
-        return new ast_1.FunctionDecNode(functionName, parameters, this.block(), false, false, tp);
+        let rt = undefined;
+        if (this.match(token_1.TokenType.Colon)) {
+            rt = this.type();
+        }
+        return new ast_1.FunctionDecNode(functionName, parameters, this.block(), false, false, tp, rt);
     }
     async_function_dec() {
         if (!this.match(token_1.TokenType.Async)) {
@@ -119,7 +123,17 @@ class Parser {
         if (!this.match(token_1.TokenType.RightParen)) {
             this.error("Expected ')' after parameters");
         }
-        return new ast_1.LambdaNode(parameters, this.block(), false, tp);
+        let rt = undefined;
+        if (this.match(token_1.TokenType.Colon)) {
+            rt = this.type();
+        }
+        // let body = undefined;
+        // if (this.peek().type == TokenType.LeftBrace) {
+        //     body = ;
+        // } else if (this.match(TokenType.Arrow)) {
+        //     body = this.expression()
+        // }
+        return new ast_1.LambdaNode(parameters, this.block(), false, tp, rt);
     }
     parameters_list() {
         if (this.peek().type == token_1.TokenType.RightParen) {
@@ -161,6 +175,8 @@ class Parser {
                 return this.if_statement();
             case token_1.TokenType.Struct:
                 return this.struct_statement();
+            case token_1.TokenType.Enum:
+                return this.enum_statement();
             case token_1.TokenType.Let:
                 {
                     const node = this.variable_statement();
@@ -577,11 +593,9 @@ class Parser {
         switch (this.peek().type) {
             case token_1.TokenType.True:
             case token_1.TokenType.False:
-                return this.boolean();
             case token_1.TokenType.Number:
-                return this.number();
             case token_1.TokenType.String:
-                return this.string();
+                return this.constants();
             case token_1.TokenType.LeftBracket:
                 return this.array();
             case token_1.TokenType.LeftBrace:
@@ -607,6 +621,18 @@ class Parser {
                 }
         }
         return this.error('Unknown');
+    }
+    constants() {
+        switch (this.peek().type) {
+            case token_1.TokenType.True:
+            case token_1.TokenType.False:
+                return this.boolean();
+            case token_1.TokenType.Number:
+                return this.number();
+            case token_1.TokenType.String:
+                return this.string();
+        }
+        this.error('Unknown');
     }
     number() {
         if (!this.match(token_1.TokenType.Number)) {
@@ -649,7 +675,8 @@ class Parser {
         if (!this.check(token_1.TokenType.RightBrace)) {
             do {
                 properties.push(this.property_definition());
-            } while (this.match(token_1.TokenType.Comma));
+            } while (this.match(token_1.TokenType.Comma) &&
+                !this.check(token_1.TokenType.RightBrace));
         }
         if (!this.match(token_1.TokenType.RightBrace)) {
             this.error("Expected a '}'");
@@ -662,6 +689,9 @@ class Parser {
             case token_1.TokenType.String:
             case token_1.TokenType.Identifier: {
                 key = this.peek().value;
+                if (!/^[a-zA-Z]+$/.test(key)) {
+                    key = `'${key.replace(/'/g, "\\'")}'`;
+                }
                 this.advance();
                 break;
             }
@@ -696,10 +726,16 @@ class Parser {
         else if ((type = this.map_type())) {
             return type;
         }
+        else if ((type = this.promise_type())) {
+            return type;
+        }
         else if ((type = this.function_type())) {
             return type;
         }
         else if ((type = this.struct_type())) {
+            return type;
+        }
+        else if ((type = this.enum_type())) {
             return type;
         }
         else if ((type = this.primitive())) {
@@ -749,7 +785,7 @@ class Parser {
     }
     array_type() {
         const value = this.peek().value;
-        if (value === "array") {
+        if (value === "Array") {
             this.advance();
             if (!this.match(token_1.TokenType.LT)) {
                 this.error("Expected <");
@@ -758,13 +794,28 @@ class Parser {
             if (!this.match(token_1.TokenType.GT)) {
                 this.error("Expected >");
             }
-            return new ast_1.TypeNode("array", [type]);
+            return new ast_1.TypeNode("Array", [type]);
+        }
+        return null;
+    }
+    promise_type() {
+        const value = this.peek().value;
+        if (value === "Promise") {
+            this.advance();
+            if (!this.match(token_1.TokenType.LT)) {
+                this.error("Expected <");
+            }
+            const type = this.type();
+            if (!this.match(token_1.TokenType.GT)) {
+                this.error("Expected >");
+            }
+            return new ast_1.TypeNode("Promise", [type]);
         }
         return null;
     }
     map_type() {
         const value = this.peek().value;
-        if (value === "map") {
+        if (value === "Map") {
             this.advance();
             if (!this.match(token_1.TokenType.LT)) {
                 this.error("Expected <");
@@ -777,7 +828,7 @@ class Parser {
             if (!this.match(token_1.TokenType.GT)) {
                 this.error("Expected >");
             }
-            return new ast_1.TypeNode("map", [keyType, valueType]);
+            return new ast_1.TypeNode("Map", [keyType, valueType]);
         }
         return null;
     }
@@ -818,6 +869,29 @@ class Parser {
         }
         return new ast_1.TypeNode("struct", [name, ...typeParams]);
     }
+    enum_type() {
+        if (!this.match(token_1.TokenType.Enum)) {
+            return null;
+        }
+        if (!this.match(token_1.TokenType.Identifier)) {
+            this.error("Expected a name for enum");
+        }
+        const name = this.previous().value;
+        const typeParams = [];
+        if (this.match(token_1.TokenType.LT)) {
+            do {
+                const typeParam = this.type();
+                if (!typeParam) {
+                    this.error("Expected a valid type parameter");
+                }
+                typeParams.push(typeParam);
+            } while (this.match(token_1.TokenType.Comma));
+            if (!this.match(token_1.TokenType.GT)) {
+                this.error("Expected token '>'");
+            }
+        }
+        return new ast_1.TypeNode("enum", [name, ...typeParams]);
+    }
     struct_statement() {
         if (!this.match(token_1.TokenType.Struct)) {
             this.error(`Expected token 'struct'`);
@@ -846,11 +920,75 @@ class Parser {
         while (!this.check(token_1.TokenType.RightBrace)) {
             const identifier = this.identifier();
             fields.push(new ast_1.FieldNode(identifier));
-            if (!this.match(token_1.TokenType.SemiColon)) {
-                this.error(`Expected ';' after field declaration`);
+            if (!this.match(token_1.TokenType.Comma)) {
+                if (!this.check(token_1.TokenType.RightBrace)) {
+                    this.error(`Expected ',' after field declaration`);
+                }
             }
         }
         return fields;
+    }
+    enum_statement() {
+        if (!this.match(token_1.TokenType.Enum)) {
+            this.error(`Expected token 'enum'`);
+        }
+        const name = this.peek().value;
+        this.advance();
+        let tp = undefined;
+        if (this.match(token_1.TokenType.LT)) {
+            tp = this.type_parameters();
+            if (!this.match(token_1.TokenType.GT)) {
+                this.error(`Expected token '>'`);
+            }
+        }
+        if (!this.match(token_1.TokenType.LeftBrace)) {
+            this.error(`Expected token '{'`);
+        }
+        let body = this.enum_body();
+        if (!this.match(token_1.TokenType.RightBrace)) {
+            this.error(`Expected token '}'`);
+        }
+        if (this.match(token_1.TokenType.SemiColon)) { }
+        return new ast_1.EnumNode(name, body, tp);
+    }
+    enum_body() {
+        const variants = [];
+        while (!this.check(token_1.TokenType.RightBrace)) {
+            if (!this.match(token_1.TokenType.Identifier)) {
+                this.error(`Expected an identifier`);
+            }
+            const name = this.previous().value;
+            let value = undefined;
+            if (this.match(token_1.TokenType.LeftBrace)) {
+                value = new ast_1.StructVariantNode(this.field_list());
+                if (!this.match(token_1.TokenType.RightBrace)) {
+                    this.error(`Expected '}' to close struct variant`);
+                }
+            }
+            else if (this.match(token_1.TokenType.LeftParen)) {
+                value = new ast_1.TupleVariantNode(this.tuple_payload());
+                if (!this.match(token_1.TokenType.RightParen)) {
+                    this.error(`Expected ')' to close tuple variant`);
+                }
+            }
+            else if (this.match(token_1.TokenType.Equals)) {
+                value = new ast_1.ConstantVariantNode(this.constants());
+            }
+            variants.push(new ast_1.EnumVariantNode(name, value));
+            if (!this.match(token_1.TokenType.Comma)) {
+                if (!this.check(token_1.TokenType.RightBrace)) {
+                    this.error(`Expected ',' after enum variant`);
+                }
+            }
+        }
+        return variants;
+    }
+    tuple_payload() {
+        const types = [];
+        do {
+            types.push(this.type());
+        } while (this.match(token_1.TokenType.Comma));
+        return types;
     }
 }
 exports.Parser = Parser;

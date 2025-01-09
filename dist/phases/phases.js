@@ -14,6 +14,7 @@ class Phases {
             if (pass.run)
                 ast = pass.run(ast, this.builtin);
         });
+        return ast;
     }
 }
 exports.Phases = Phases;

@@ -1,6 +1,6 @@
 {
     "name": "@kithinji/nac",
-    "version": "1.0.38",
+    "version": "1.0.44",
     "main": "dist/main.js",
     "module": "dist/main.mjs",
     "types": "dist/main.d.ts",
@@ -33,7 +33,6 @@
     },
     "homepage": "https://github.com/kithinjibrian/nac#readme",
     "dependencies": {
-        "axios": "^1.7.9",
-        "isolated-vm": "^5.0.3"
+        "axios": "^1.7.9"
     }
 }

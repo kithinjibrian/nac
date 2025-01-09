@@ -6,7 +6,7 @@ import { ASTNode, ASTVisitor, BinaryOpNode, BlockNode, Builtin, CallExpressionNo
 export class CPS implements ASTVisitor {
 
     public before_accept(node: ASTNode) {
-        console.log(node.type);
+        // console.log(node.type);
     }
 
     public run(
@@ -18,7 +18,7 @@ export class CPS implements ASTVisitor {
             isStatement: true
         });
 
-        console.log(res);
+        //  console.log(res);
         return res;
     }
 

@@ -264,7 +264,8 @@ class Lexer {
             ["false", token_1.TokenType.False],
             ["extends", token_1.TokenType.Extends],
             ["async", token_1.TokenType.Async],
-            ["await", token_1.TokenType.Await]
+            ["await", token_1.TokenType.Await],
+            ["enum", token_1.TokenType.Enum]
         ]);
         return {
             type: keywords.get(value) || token_1.TokenType.Identifier,

@@ -72,6 +72,7 @@ export declare enum TokenType {
     Import = "Import",
     Extends = "Extends",
     Async = "Async",
-    Await = "Await"
+    Await = "Await",
+    Enum = "Enum"
 }
 //# sourceMappingURL=token.d.ts.map

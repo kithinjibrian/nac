@@ -1,4 +1,4 @@
-import { ArrayNode, ASTNode, ASTVisitor, AwaitExpressionNode, BinaryOpNode, BlockNode, CallExpressionNode, ExpressionStatementNode, FieldNode, FunctionDecNode, GenericTypeNode, IdentifierNode, IfElseNode, MemberExpressionNode, NumberNode, ObjectNode, ParameterNode, ParametersListNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, StructNode, TypeNode, TypeParameterNode, VariableListNode, VariableNode } from "../parser/ast";
+import { ArrayNode, ASTNode, ASTVisitor, AwaitExpressionNode, BinaryOpNode, BlockNode, CallExpressionNode, ConstantVariantNode, EnumNode, EnumVariantNode, ExpressionStatementNode, FieldNode, FunctionDecNode, GenericTypeNode, IdentifierNode, IfElseNode, LambdaNode, MemberExpressionNode, NumberNode, ObjectNode, ParameterNode, ParametersListNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, StructNode, TypeNode, TypeParameterNode, VariableListNode, VariableNode } from "../parser/ast";
 import { Builtin } from "../phases/phases";
 import { Frame } from "../dsa/symtab";
 import { HM } from "./hm";
@@ -30,6 +30,7 @@ export declare const stringTypeClass: TypeClass;
 export declare const ordTypeClass: TypeClass;
 export declare const eqTypeClass: TypeClass;
 export declare const showTypeClass: TypeClass;
+export declare const structTypeClass: TypeClass;
 export declare class TypeChecker implements ASTVisitor {
     opts: Record<string, any>;
     primitives: string[];
@@ -39,6 +40,7 @@ export declare class TypeChecker implements ASTVisitor {
     constructor(opts?: Record<string, any>, primitives?: string[]);
     run(ast: ASTNode, builtin: Record<string, Builtin>): ASTNode;
     _run(ast: ASTNode, builtin: Record<string, Builtin>): any;
+    private get_type;
     proc_builtin({ node }: {
         node: Builtin;
     }): any;
@@ -51,6 +53,9 @@ export declare class TypeChecker implements ASTVisitor {
     before_accept(node: ASTNode): void;
     visitSourceElements(node: SourceElementsNode, args?: Record<string, any>): Types[];
     visitExpressionStatement(node: ExpressionStatementNode, args?: Record<string, any>): any;
+    visitLambda(node: LambdaNode, { frame }: {
+        frame: Frame;
+    }): Types;
     visitFunctionDec(node: FunctionDecNode, { frame }: {
         frame: Frame;
     }): Types;
@@ -76,7 +81,9 @@ export declare class TypeChecker implements ASTVisitor {
         frame: Frame;
     }): Types;
     visitAwaitExpression(node: AwaitExpressionNode, args?: Record<string, any>): any;
-    visitCallExpression(node: CallExpressionNode, args?: Record<string, any>): Types;
+    visitCallExpression(node: CallExpressionNode, { promisify, ...args }: {
+        promisify: Boolean;
+    }): Types;
     visitMemberExpression(node: MemberExpressionNode, args?: Record<string, any>): Types | undefined;
     visitIdentifier(node: IdentifierNode, { frame }: {
         frame: Frame;
@@ -84,12 +91,22 @@ export declare class TypeChecker implements ASTVisitor {
     visitGenericType(node: GenericTypeNode, { frame }: {
         frame: Frame;
     }): Types | void;
-    visitTypeParameter(node: TypeParameterNode, { frame }: {
+    visitTypeParameter(node: TypeParameterNode, { frame, type }: {
         frame: Frame;
+        type: Types;
     }): Types;
+    resolve_type(node: TypeNode, typeName: string, frame: Frame): Types;
     visitType(node: TypeNode, { frame }: {
         frame: Frame;
     }): Types | void;
+    typeStruct(node: TypeNode, { frame, type_parameters }: {
+        frame: Frame;
+        type_parameters?: any[];
+    }): void;
+    typeEnum(node: TypeNode, { frame }: {
+        frame: Frame;
+    }): void;
+    enum_variant_type(variant: EnumVariantNode, frame: Frame): Types;
     visitArray(node: ArrayNode, args?: Record<string, any>): Types;
     visitObject(node: ObjectNode, args?: Record<string, any>): Types;
     visitStructDef(node: StructDefNode, args?: Record<string, any>): {
@@ -100,9 +117,15 @@ export declare class TypeChecker implements ASTVisitor {
             constraints: TypeClass[];
         };
     } | undefined;
-    visitStruct(node: StructNode, { frame }: {
+    visitEnum(node: EnumNode, { frame }: {
         frame: Frame;
-    }): void;
+    }): Types;
+    visitEnumVariant(node: EnumVariantNode, args?: Record<string, any>): Types;
+    visitConstantVariant(node: ConstantVariantNode, args?: Record<string, any>): any;
+    visitStruct(node: StructNode, { frame, type_parameters }: {
+        frame: Frame;
+        type_parameters: any[];
+    }): Types;
     visitField(node: FieldNode, args?: Record<string, any>): {
         magic: string;
         name: string;

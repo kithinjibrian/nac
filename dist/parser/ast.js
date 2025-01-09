@@ -1,12 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FieldNode = exports.StructNode = exports.AssignmentNode = exports.GenericTypeNode = exports.TypeNode = exports.TypeParameterNode = exports.IdentifierNode = exports.PostfixExpressionNode = exports.ArrowExpressionNode = exports.CallExpressionNode = exports.AwaitExpressionNode = exports.MemberExpressionNode = exports.UnaryOpNode = exports.IfElseNode = exports.TertiaryExpressionNode = exports.BinaryOpNode = exports.PropertyNode = exports.StructDefNode = exports.ObjectNode = exports.ArrayNode = exports.StringNode = exports.BooleanNode = exports.NumberNode = exports.ExpressionNode = exports.ExpressionStatementNode = exports.VariableNode = exports.VariableListNode = exports.ReturnNode = exports.ParameterNode = exports.ParametersListNode = exports.LambdaNode = exports.FunctionDecNode = exports.ContinuationNode = exports.ForNode = exports.WhileNode = exports.BlockNode = exports.SourceElementsNode = exports.ASTNodeBase = void 0;
+exports.ConstantVariantNode = exports.TupleVariantNode = exports.StructVariantNode = exports.EnumVariantNode = exports.EnumNode = exports.FieldNode = exports.StructNode = exports.AssignmentNode = exports.GenericTypeNode = exports.TypeNode = exports.TypeParameterNode = exports.IdentifierNode = exports.PostfixExpressionNode = exports.ArrowExpressionNode = exports.CallExpressionNode = exports.AwaitExpressionNode = exports.MemberExpressionNode = exports.UnaryOpNode = exports.IfElseNode = exports.TertiaryExpressionNode = exports.BinaryOpNode = exports.PropertyNode = exports.StructDefNode = exports.ObjectNode = exports.ArrayNode = exports.StringNode = exports.BooleanNode = exports.NumberNode = exports.ExpressionNode = exports.ExpressionStatementNode = exports.VariableNode = exports.VariableListNode = exports.ReturnNode = exports.ParameterNode = exports.ParametersListNode = exports.LambdaNode = exports.FunctionDecNode = exports.ContinuationNode = exports.ForNode = exports.WhileNode = exports.BlockNode = exports.SourceElementsNode = exports.ASTNodeBase = void 0;
 class ASTNodeBase {
     accept(visitor, args) {
         var _a, _b;
-        (_a = visitor.before_accept) === null || _a === void 0 ? void 0 : _a.call(visitor, this);
+        (_a = visitor.before_accept) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
         const res = this._accept(visitor, args);
-        (_b = visitor.after_accept) === null || _b === void 0 ? void 0 : _b.call(visitor, this);
+        (_b = visitor.after_accept) === null || _b === void 0 ? void 0 : _b.call(visitor, this, args);
         return res;
     }
 }
@@ -77,7 +77,7 @@ class ContinuationNode extends ASTNodeBase {
 }
 exports.ContinuationNode = ContinuationNode;
 class FunctionDecNode extends ASTNodeBase {
-    constructor(identifier, params, body, inbuilt = false, is_async = false, type_parameters) {
+    constructor(identifier, params, body, inbuilt = false, is_async = false, type_parameters, return_type) {
         super();
         this.identifier = identifier;
         this.params = params;
@@ -85,6 +85,7 @@ class FunctionDecNode extends ASTNodeBase {
         this.inbuilt = inbuilt;
         this.is_async = is_async;
         this.type_parameters = type_parameters;
+        this.return_type = return_type;
         this.type = 'FunctionDec';
     }
     _accept(visitor, args) {
@@ -94,12 +95,13 @@ class FunctionDecNode extends ASTNodeBase {
 }
 exports.FunctionDecNode = FunctionDecNode;
 class LambdaNode extends ASTNodeBase {
-    constructor(params, body, is_async = false, type_parameters) {
+    constructor(params, body, is_async = false, type_parameters, return_type) {
         super();
         this.params = params;
         this.body = body;
         this.is_async = is_async;
         this.type_parameters = type_parameters;
+        this.return_type = return_type;
         this.type = 'Lambda';
     }
     _accept(visitor, args) {
@@ -496,3 +498,66 @@ class FieldNode extends ASTNodeBase {
     }
 }
 exports.FieldNode = FieldNode;
+class EnumNode extends ASTNodeBase {
+    constructor(name, body, type_parameters) {
+        super();
+        this.name = name;
+        this.body = body;
+        this.type_parameters = type_parameters;
+        this.type = "Enum";
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitEnum) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.EnumNode = EnumNode;
+class EnumVariantNode extends ASTNodeBase {
+    constructor(name, value) {
+        super();
+        this.name = name;
+        this.value = value;
+        this.type = "EnumVariant";
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitEnumVariant) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.EnumVariantNode = EnumVariantNode;
+class StructVariantNode extends ASTNodeBase {
+    constructor(fields) {
+        super();
+        this.fields = fields;
+        this.type = "StructVariant";
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitStructVariant) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.StructVariantNode = StructVariantNode;
+class TupleVariantNode extends ASTNodeBase {
+    constructor(types) {
+        super();
+        this.types = types;
+        this.type = "TupleVariant";
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitTupleVariant) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.TupleVariantNode = TupleVariantNode;
+class ConstantVariantNode extends ASTNodeBase {
+    constructor(types) {
+        super();
+        this.types = types;
+        this.type = "ConstantVariant";
+    }
+    _accept(visitor, args) {
+        var _a;
+        return (_a = visitor.visitConstantVariant) === null || _a === void 0 ? void 0 : _a.call(visitor, this, args);
+    }
+}
+exports.ConstantVariantNode = ConstantVariantNode;

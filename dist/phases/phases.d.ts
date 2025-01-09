@@ -15,6 +15,6 @@ export declare class Phases {
     builtin: Record<string, Builtin>;
     constructor(passes: any[], builtin: Record<string, Builtin>);
     push(pass: ASTVisitor): void;
-    run(ast: ASTNode): void;
+    run(ast: ASTNode): ASTNode;
 }
 //# sourceMappingURL=phases.d.ts.map

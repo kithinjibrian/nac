@@ -1,7 +1,34 @@
-import { ArrayNode, ASTNode, ASTVisitor, AwaitExpressionNode, BinaryOpNode, BlockNode, BooleanNode, Builtin, CallExpressionNode, ExpressionStatementNode, FieldNode, FunctionDecNode, IdentifierNode, IfElseNode, LambdaNode, MemberExpressionNode, NumberNode, ObjectNode, ParameterNode, ParametersListNode, PropertyNode, ReturnNode, SourceElementsNode, StringNode, StructDefNode, StructNode, VariableListNode, VariableNode } from "../types";
-import * as ivm from 'isolated-vm';
-import { readFile } from "fs/promises"
-import path = require("path");
+import {
+    ArrayNode,
+    ASTNode,
+    ASTVisitor,
+    AwaitExpressionNode,
+    BinaryOpNode,
+    BlockNode,
+    BooleanNode,
+    Builtin,
+    CallExpressionNode,
+    ExpressionStatementNode,
+    FieldNode,
+    FunctionDecNode,
+    IdentifierNode,
+    IfElseNode,
+    LambdaNode,
+    MemberExpressionNode,
+    NumberNode,
+    ObjectNode,
+    ParameterNode,
+    ParametersListNode,
+    PropertyNode,
+    ReturnNode,
+    SourceElementsNode,
+    StringNode,
+    StructDefNode,
+    StructNode,
+    VariableListNode,
+    VariableNode
+} from "../types";
+
 import { Extension } from "../plugin/plugin";
 
 export class JS implements ASTVisitor {
@@ -28,7 +55,7 @@ export class JS implements ASTVisitor {
         node: ASTNode,
         args?: Record<string, any>
     ) {
-        console.log(node.type)
+        // console.log(node.type)
         switch (node.type) {
             case "Let":
             case "ExpressionStatement":
@@ -125,39 +152,11 @@ export class JS implements ASTVisitor {
 
         this.init(ast as SourceElementsNode, opts);
 
-        console.log(this.codeBuffer.join(''));
-
         return this;
     }
 
-    public async runJS() {
-        const isolate = new ivm.Isolate({ memoryLimit: 128 });
-
-        const context = isolate.createContextSync();
-        const jail = context.global;
-
-        jail.setSync('ivm', ivm);
-
-        Object.entries(this.builtin)
-            .forEach(async ([key, value]) => {
-                if (value.type == "function") {
-                    if (value.async)
-                        await jail.set(key, new ivm.Reference(value.exec))
-                    else
-                        await jail.set(key, value.exec);
-                }
-            })
-
-        // stubs
-        await context.eval(
-            await readFile(path.join(__dirname, "/stubs.js"), "utf-8")
-        );
-
-        const script = await isolate.compileScript(this.codeBuffer.join(''));
-
-        const result = await script.run(context).catch(err => console.error(err));
-
-        console.log(result);
+    public code() {
+        return this.codeBuffer.join('');
     }
 
     private indent(): string {

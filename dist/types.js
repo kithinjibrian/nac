@@ -35,3 +35,5 @@ __exportStar(require("./phases/phases"), exports);
 __exportStar(require("./builtin"), exports);
 __exportStar(require("./CPS/cps"), exports);
 __exportStar(require("./gen/js"), exports);
+__exportStar(require("./sema/sema"), exports);
+__exportStar(require("./iso-vm/gen"), exports);

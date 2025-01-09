@@ -53,6 +53,7 @@ export declare class Parser {
     private unary_expression;
     private postfix_expression;
     private primary_expression;
+    private constants;
     private number;
     private boolean;
     private string;
@@ -65,10 +66,15 @@ export declare class Parser {
     private type_parameters;
     private primitive;
     private array_type;
+    private promise_type;
     private map_type;
     private function_type;
     private struct_type;
+    private enum_type;
     private struct_statement;
     private field_list;
+    private enum_statement;
+    private enum_body;
+    private tuple_payload;
 }
 //# sourceMappingURL=parser.d.ts.map

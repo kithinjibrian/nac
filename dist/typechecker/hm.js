@@ -1,6 +1,66 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HM = void 0;
+exports.tcon = tcon;
+exports.tfun = tfun;
+exports.tcon_ex = tcon_ex;
+exports.tvar = tvar;
+Set.prototype.hasType = function (value) {
+    if (value.tag === "TVar") {
+        return [...this].some(item => item.tag === "TVar" && item.tvar === value.tvar);
+    }
+    return this.has(value);
+};
+Map.prototype.setType = function (key, value) {
+    if (key.tag == "TVar") {
+        return this.set(key.tvar, value);
+    }
+    return this.set(key, value);
+};
+Map.prototype.getType = function (key) {
+    if (key.tag == "TVar") {
+        return this.get(key.tvar);
+    }
+    return this.get(key);
+};
+function tcon(type) {
+    return {
+        tag: "TCon",
+        tcon: {
+            name: type,
+            types: [],
+            constraints: []
+        }
+    };
+}
+function tfun(params, ret) {
+    return {
+        tag: "TCon",
+        tcon: {
+            name: "->",
+            types: [...params, ret],
+            constraints: []
+        }
+    };
+}
+function tcon_ex(name, types) {
+    return {
+        tag: "TCon",
+        tcon: {
+            name: name,
+            types: types,
+            constraints: []
+        }
+    };
+}
+let counter = 0;
+function tvar(name) {
+    return {
+        tag: "TVar",
+        tvar: name !== null && name !== void 0 ? name : `T${counter++}`,
+        constraints: []
+    };
+}
 class HM {
     constructor(constraints = []) {
         this.constraints = constraints;
@@ -30,6 +90,23 @@ class HM {
             }
         }
     }
+    generalize(ctx, type) {
+        const ctxVars = new Set();
+        for (const scheme of ctx.values()) {
+            for (const v of this.tvs(scheme.type))
+                ctxVars.add(v);
+        }
+        const vars = new Set(Array.from(this.tvs(type)).filter((v) => !ctxVars.has(v)));
+        return { vars, type };
+    }
+    instantiate(scheme) {
+        const subst = new Map();
+        for (const v of scheme.vars) {
+            subst.set(v, tvar());
+        }
+        return this.apply(subst, scheme.type);
+    }
+    ;
     constraint_eq(left, right) {
         this.constraints.push({
             tag: "EQUALITY_CON",
@@ -38,17 +115,20 @@ class HM {
         });
     }
     bind(a, b) {
-        const subst = new Map();
         if (a.tag === "TVar") {
-            subst.set(a.tvar, b);
+            if (b.tag === "TVar" && b.tvar == a.tvar)
+                return new Map();
         }
-        return subst;
+        if (this.tvs(b).hasType(a)) {
+            throw new Error(`Occurs check fails: ${this.typeToString(a)} in ${this.typeToString(b)}`);
+        }
+        return new Map().setType(a, b);
     }
     ;
     apply(subst, type) {
         var _a;
         if (type.tag === "TVar") {
-            return (_a = subst.get(type.tvar)) !== null && _a !== void 0 ? _a : type;
+            return (_a = subst.getType(type)) !== null && _a !== void 0 ? _a : type;
         }
         else if (type.tag === "TCon") {
             return {
@@ -80,6 +160,16 @@ class HM {
         return null;
     }
     ;
+    tvs(type) {
+        switch (type.tag) {
+            case "TVar":
+                return new Set([type]);
+            case "TCon":
+                return new Set(type.tcon.types.flatMap(t => [...this.tvs(t)]));
+            case "TRec":
+                return new Set(Object.values(type.trec.types).flatMap(t => [...this.tvs(t)]));
+        }
+    }
     compose(a, b) {
         const union = new Map([...a, ...b]);
         return new Map(Array.from(union).map(([key, value]) => [

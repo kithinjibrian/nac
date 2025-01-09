@@ -77,4 +77,5 @@ var TokenType;
     TokenType["Extends"] = "Extends";
     TokenType["Async"] = "Async";
     TokenType["Await"] = "Await";
+    TokenType["Enum"] = "Enum";
 })(TokenType || (exports.TokenType = TokenType = {}));

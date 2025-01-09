@@ -1,6 +1,17 @@
 "use strict";
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TypeChecker = exports.showTypeClass = exports.eqTypeClass = exports.ordTypeClass = exports.stringTypeClass = exports.numericTypeClass = void 0;
+exports.TypeChecker = exports.structTypeClass = exports.showTypeClass = exports.eqTypeClass = exports.ordTypeClass = exports.stringTypeClass = exports.numericTypeClass = void 0;
 const ast_1 = require("../parser/ast");
 const lexer_1 = require("../lexer/lexer");
 const parser_1 = require("../parser/parser");
@@ -26,44 +37,10 @@ exports.showTypeClass = {
     name: "Show",
     methods: ["str"]
 };
-function tcon(type) {
-    return {
-        tag: "TCon",
-        tcon: {
-            name: type,
-            types: [],
-            constraints: []
-        }
-    };
-}
-function tfun(params, ret) {
-    return {
-        tag: "TCon",
-        tcon: {
-            name: "->",
-            types: [...params, ret],
-            constraints: []
-        }
-    };
-}
-function tcon_ex(name, types) {
-    return {
-        tag: "TCon",
-        tcon: {
-            name: name,
-            types: types,
-            constraints: []
-        }
-    };
-}
-let counter = 0;
-function tvar(name) {
-    return {
-        tag: "TVar",
-        tvar: name !== null && name !== void 0 ? name : `T${counter++}`,
-        constraints: []
-    };
-}
+exports.structTypeClass = {
+    name: "Struct",
+    methods: []
+};
 class TypeChecker {
     constructor(opts = {}, primitives = ["integer", "float", "boolean", "string"]) {
         this.opts = opts;
@@ -81,10 +58,8 @@ class TypeChecker {
         this.enter({ frame: this.global });
         Object.entries(builtin)
             .map(([key, value]) => {
-            if (value.type == "function") {
-                this.global.symbol_table.set(key, this.proc_builtin({ node: value }));
-            }
-            else if (value.type == "variable") {
+            if (value.type == "function" ||
+                value.type == "variable") {
                 this.global.symbol_table.set(key, this.proc_builtin({ node: value }));
             }
         });
@@ -92,19 +67,22 @@ class TypeChecker {
         this.exit();
         return ret;
     }
+    get_type(code) {
+        const lexer = new lexer_1.Lexer(code);
+        const tokens = lexer.tokenize();
+        const parser = new parser_1.Parser(tokens);
+        const ast = parser.type();
+        const tc = new TypeChecker();
+        return tc._run(ast, {});
+    }
     proc_builtin({ node }) {
         if (node.type == "function") {
-            const lexer = new lexer_1.Lexer(node.signature);
-            const tokens = lexer.tokenize();
-            const parser = new parser_1.Parser(tokens);
-            const ast = parser.type();
-            const tc = new TypeChecker();
-            const ty = tc._run(ast, {});
-            if (ty !== undefined) {
-                return ty;
+            const ftype = this.get_type(node.signature);
+            if (ftype !== undefined) {
+                return ftype;
             }
         }
-        return tcon("void");
+        return (0, hm_1.tcon)("void");
     }
     enter({ frame }) {
         (0, symtab_1.set_symbol)("tc:Num", exports.numericTypeClass, frame);
@@ -112,6 +90,7 @@ class TypeChecker {
         (0, symtab_1.set_symbol)("tc:Ord", exports.ordTypeClass, frame);
         (0, symtab_1.set_symbol)("tc:Eq", exports.eqTypeClass, frame);
         (0, symtab_1.set_symbol)("tc:Show", exports.showTypeClass, frame);
+        (0, symtab_1.set_symbol)("tc:Struct", exports.structTypeClass, frame);
         (0, symtab_1.set_symbol)("tcon:integer", [exports.showTypeClass, exports.numericTypeClass, exports.ordTypeClass, exports.eqTypeClass], frame);
         (0, symtab_1.set_symbol)("tcon:float", [exports.showTypeClass, exports.numericTypeClass, exports.ordTypeClass, exports.eqTypeClass], frame);
         (0, symtab_1.set_symbol)("tcon:string", [exports.showTypeClass, exports.stringTypeClass, exports.eqTypeClass], frame);
@@ -173,7 +152,29 @@ class TypeChecker {
     visitExpressionStatement(node, args) {
         return node.expression.accept(this, args);
     }
+    visitLambda(node, { frame }) {
+        var _a, _b;
+        const nf = (0, symtab_1.new_frame)(frame);
+        let types = [];
+        if (node.params) {
+            const ts = node.params.accept(this, { frame: nf });
+            if (ts !== undefined)
+                types = ts;
+        }
+        const body = node.body.accept(this, { frame: nf });
+        const returnType = (_b = (_a = node.return_type) === null || _a === void 0 ? void 0 : _a.accept(this, { frame: nf })) !== null && _b !== void 0 ? _b : (0, hm_1.tvar)();
+        if (body !== undefined) {
+            for (const retType of body) {
+                this.hm.constraint_eq(returnType, retType);
+            }
+        }
+        let ftype = (0, hm_1.tfun)(types, node.is_async
+            ? (0, hm_1.tcon_ex)("promise", [returnType])
+            : returnType);
+        return ftype;
+    }
     visitFunctionDec(node, { frame }) {
+        var _a, _b;
         const nf = (0, symtab_1.new_frame)(frame);
         if (node.type_parameters) {
             node.type_parameters.forEach(tp => {
@@ -187,13 +188,15 @@ class TypeChecker {
                 types = ts;
         }
         const body = node.body.accept(this, { frame: nf });
-        const returnType = tvar();
+        const returnType = (_b = (_a = node.return_type) === null || _a === void 0 ? void 0 : _a.accept(this, { frame: nf })) !== null && _b !== void 0 ? _b : (0, hm_1.tvar)();
         if (body !== undefined) {
             for (const retType of body) {
                 this.hm.constraint_eq(returnType, retType);
             }
         }
-        const ftype = tfun(types, returnType);
+        let ftype = (0, hm_1.tfun)(types, node.is_async
+            ? (0, hm_1.tcon_ex)("promise", [returnType])
+            : returnType);
         (0, symtab_1.set_symbol)(node.identifier, ftype, frame);
         return ftype;
     }
@@ -214,7 +217,7 @@ class TypeChecker {
                 return t;
             }
         }
-        const paramType = node.variadic ? tcon_ex("array", [tvar()]) : tvar();
+        const paramType = node.variadic ? (0, hm_1.tcon_ex)("array", [(0, hm_1.tvar)()]) : (0, hm_1.tvar)();
         (0, symtab_1.set_symbol)(node.identifier.name, paramType, frame);
         return paramType;
     }
@@ -245,14 +248,14 @@ class TypeChecker {
                 return exprType;
             }
         }
-        frame.return_value = tcon("void");
-        return tcon("void");
+        frame.return_value = (0, hm_1.tcon)("void");
+        return (0, hm_1.tcon)("void");
     }
     visitIfElse(node, args) {
         var _a;
         const cond = node.condition.accept(this, args);
         if (cond !== undefined)
-            this.hm.constraint_eq(cond, tcon("boolean"));
+            this.hm.constraint_eq(cond, (0, hm_1.tcon)("boolean"));
         const ctype = node.consequent.accept(this, args);
         (_a = node.alternate) === null || _a === void 0 ? void 0 : _a.accept(this);
         return ctype;
@@ -283,7 +286,7 @@ class TypeChecker {
                 this.hm.constraint_eq(def_type, inferredType);
                 let dt = def_type;
                 if (dt.tag == "TRec") {
-                    if (dt.trec.name !== "map") {
+                    if (dt.trec.name !== "Map") {
                         return dt;
                     }
                 }
@@ -345,7 +348,7 @@ class TypeChecker {
                     throw new Error(`Comparison requires Ord type class for types ${this.typeToString(left)} and ${this.typeToString(right)}`);
                 }
                 this.hm.constraint_eq(left, right);
-                return tcon("boolean");
+                return (0, hm_1.tcon)("boolean");
             }
             case "==":
             case "!=": {
@@ -355,15 +358,22 @@ class TypeChecker {
                     throw new Error(`Equality comparison requires Eq type class for types ${this.typeToString(left)} and ${this.typeToString(right)}`);
                 }
                 this.hm.constraint_eq(left, right);
-                return tcon("boolean");
+                return (0, hm_1.tcon)("boolean");
             }
         }
         throw new Error(`Unsupported operator: ${node.operator}`);
     }
     visitAwaitExpression(node, args) {
-        return node.expression.accept(this, args);
+        const type = node.expression.accept(this, Object.assign({ promisify: true }, args));
+        if (type !== undefined) {
+            if (type.tag == "TCon") {
+                return type.tcon.types[0];
+            }
+        }
+        return type;
     }
-    visitCallExpression(node, args) {
+    visitCallExpression(node, _a) {
+        var { promisify } = _a, args = __rest(_a, ["promisify"]);
         const callee = node.callee.accept(this, args);
         const _args = [];
         node.args.forEach((a) => {
@@ -371,24 +381,48 @@ class TypeChecker {
             if (y !== undefined)
                 _args.push(y);
         });
-        const ret = tvar();
-        const ftype = tfun(_args, ret);
+        const ret = (0, hm_1.tvar)();
+        const retType = promisify
+            ? (0, hm_1.tcon_ex)("Promise", [ret])
+            : ret;
+        const ftype = (0, hm_1.tfun)(_args, retType);
         if (callee !== undefined)
             this.hm.constraint_eq(callee, ftype);
-        return ret;
+        return retType;
     }
     visitMemberExpression(node, args) {
         const t = node.object.accept(this, args);
+        const key = node.property.name;
         if (t != undefined) {
-            const tp = t;
-            if (tp.tag == "TCon") {
-                if (tp.tcon.name == "array") {
-                    return tp.tcon.types[0];
+            if (t instanceof ast_1.EnumNode) {
+                const enumType = t.accept(this, args);
+                const v_index = t.body.findIndex(variant => variant.name == key);
+                if (v_index == -1)
+                    return;
+                const v_type = t.body[v_index].accept(this, args);
+                if (enumType == undefined || v_type == undefined)
+                    return;
+                const et = enumType;
+                if (et.tag == "TCon") {
+                    et.tcon.types[v_index] = v_type;
+                    return et;
                 }
             }
-            else if (tp.tag == "TRec") {
-                const key = node.property.name;
-                return tp.trec.types[key];
+            else {
+                const tp = t;
+                if (tp.tag == "TCon") {
+                    if (tp.tcon.name == "Array") {
+                        return tp.tcon.types[0];
+                    }
+                }
+                else if (tp.tag == "TRec") {
+                    return tp.trec.types[key];
+                }
+                else if (tp.tag == "TVar") {
+                    const t = (0, hm_1.tvar)();
+                    // there are issues here
+                    return t;
+                }
             }
         }
     }
@@ -396,7 +430,7 @@ class TypeChecker {
         const type = (0, symtab_1.lookup_symbol)(node.name, frame);
         if (type)
             return type;
-        return tvar();
+        return (0, hm_1.tvar)();
     }
     visitGenericType(node, { frame }) {
         node.type_parameters.forEach(tp => {
@@ -404,8 +438,8 @@ class TypeChecker {
         });
         return node.base_type.accept(this, { frame });
     }
-    visitTypeParameter(node, { frame }) {
-        const tv = tvar(node.name);
+    visitTypeParameter(node, { frame, type }) {
+        const tv = type !== null && type !== void 0 ? type : (0, hm_1.tvar)();
         if (node.constraints) {
             node.constraints.forEach(str => {
                 const tc = (0, symtab_1.lookup_symbol)(`tc:${str}`, frame);
@@ -416,70 +450,56 @@ class TypeChecker {
         (0, symtab_1.set_symbol)(`T:${node.name}`, tv, frame);
         return tv;
     }
+    resolve_type(node, typeName, frame) {
+        if (node.types) {
+            const elem = node.types[0].accept(this, { frame });
+            return (0, hm_1.tcon_ex)(typeName, [elem]);
+        }
+        throw new Error(`Expected type parameters for ${typeName}`);
+    }
     visitType(node, { frame }) {
         if (node.name == "->") {
-            let params, retType;
             if (node.types) {
-                params = node.types[0].accept(this, { frame });
-                retType = node.types[1].accept(this, { frame });
-                return tfun(params, retType);
+                const params = node.types[0].accept(this, { frame });
+                const retType = node.types[1].accept(this, { frame });
+                return (0, hm_1.tfun)(params, retType);
             }
         }
-        else if (node.name == "array") {
-            if (node.types) {
-                const elem = node.types[0].accept(this, { frame });
-                return tcon_ex("array", [elem]);
-            }
+        else if (node.name == "Array") {
+            return this.resolve_type(node, "Array", frame);
         }
-        else if (node.name == "map") {
+        else if (node.name == "Promise") {
+            return this.resolve_type(node, "Promise", frame);
+        }
+        else if (node.name == "Map") {
             if (node.types) {
                 const val = node.types[1].accept(this, { frame });
-                return tcon_ex("map", [val]);
+                return (0, hm_1.tcon_ex)("Map", [val]);
             }
         }
         else if (node.name == "struct") {
             if (node.types) {
-                const name = node.types[0];
-                const struct_node = (0, symtab_1.lookup_symbol)(name, frame);
-                if (!struct_node)
-                    return tvar(); // careful here
-                const it = [];
-                for (let i = 1; i < node.types.length; i++) {
-                    const ct = node.types[i].accept(this, { frame });
-                    if (ct !== undefined)
-                        it.push(ct);
+                const type_parameters = [];
+                for (let a = 1; a < node.types.length; a++) {
+                    type_parameters.push(node.types[a].accept(this, { frame }));
                 }
-                if (struct_node.type_parameters) {
-                    for (let y = 0; y < struct_node.type_parameters.length; y++) {
-                        const ct = struct_node.type_parameters[y].accept(this, { frame });
-                        if (it[y] && ct !== undefined) {
-                            this.hm.constraint_eq(it[y], ct);
-                        }
-                    }
-                }
-                const types = {};
-                struct_node.body.forEach(f => {
-                    const b = f.accept(this, { frame });
-                    if (b !== undefined) {
-                        const a = b;
-                        if (a.magic && a.magic == "field") {
-                            types[a.name] = a.type;
-                        }
-                    }
+                const type = this.typeStruct(node, {
+                    frame,
+                    type_parameters
                 });
-                return {
-                    tag: "TRec",
-                    trec: {
-                        name,
-                        types,
-                        constraints: []
-                    }
-                };
+                if (type !== undefined) {
+                    return type;
+                }
             }
+        }
+        else if (node.name == "enum") {
+            const type = this.typeEnum(node, { frame });
+            if (type !== undefined)
+                return type;
         }
         else if (this.primitives.includes(node.name)) {
             const tc = (0, symtab_1.lookup_symbol)(`tcon:${node.name}`, frame);
-            const p = tcon(node.name);
+            const p = (0, hm_1.tcon)(node.name);
             if (p.tag == "TCon")
                 p.tcon.constraints = [...tc];
             return p;
@@ -491,6 +511,31 @@ class TypeChecker {
             }
             throw new Error(`Couldn't find generic type <${node.name}>`);
         }
+    }
+    typeStruct(node, { frame, type_parameters }) {
+        if (!node.types)
+            return;
+        const name = node.types[0];
+        const struct_node = (0, symtab_1.lookup_symbol)(name, frame);
+        if (!struct_node) {
+            throw new Error(`Enum ${name} not found`);
+        }
+        return struct_node.accept(this, { frame, type_parameters });
+    }
+    typeEnum(node, { frame }) {
+        if (!node.types)
+            return;
+        const name = node.types[0];
+        const enum_node = (0, symtab_1.lookup_symbol)(name, frame);
+        if (!enum_node) {
+            throw new Error(`Enum ${name} not found`);
+        }
+        return enum_node.accept(this, { frame });
+    }
+    enum_variant_type(variant, frame) {
+        if (variant.value) {
+        }
+        return (0, hm_1.tcon)("int");
     }
     visitArray(node, args) {
         const types = [];
@@ -504,9 +549,9 @@ class TypeChecker {
             }
         });
         if (types.length == 0) {
-            return tcon_ex("array", [tcon("unknown")]);
+            return (0, hm_1.tcon_ex)("Array", [(0, hm_1.tcon)("unknown")]);
         }
-        return tcon_ex("array", [types[0]]);
+        return (0, hm_1.tcon_ex)("Array", [types[0]]);
     }
     visitObject(node, args) {
         const types = {};
@@ -519,7 +564,7 @@ class TypeChecker {
         return {
             tag: "TRec",
             trec: {
-                name: "map",
+                name: "Map",
                 types,
                 constraints: []
             }
@@ -529,22 +574,83 @@ class TypeChecker {
         const type = node.object.accept(this, args);
         if (type !== undefined) {
             const t = type;
-            if (t.tag == "TRec" && t.trec.name == "map") {
+            if (t.tag == "TRec" && t.trec.name == "Map") {
                 t.trec.name = node.name;
                 return t;
             }
         }
     }
-    visitStruct(node, { frame }) {
+    visitEnum(node, { frame }) {
         const name = node.name;
-        (0, symtab_1.set_symbol)(name, node, frame);
+        const types = [];
+        node.body.forEach(variant => {
+            const type = variant.accept(this, { frame });
+            if (type !== undefined)
+                types.push(type);
+        });
+        const a = {
+            tag: "TCon",
+            tcon: {
+                name,
+                types,
+                constraints: []
+            }
+        };
+        if (!(0, symtab_1.lookup_symbol)(node.name, frame))
+            (0, symtab_1.set_symbol)(node.name, node, frame);
+        return a;
+    }
+    visitEnumVariant(node, args) {
+        let types = [];
+        if (node.value) {
+            const t = node.value.accept(this, args);
+            if (t !== undefined)
+                types.push(t);
+        }
+        return {
+            tag: "TCon",
+            tcon: {
+                name: node.name,
+                types,
+                constraints: []
+            }
+        };
+    }
+    visitConstantVariant(node, args) {
+        return node.types.accept(this, args);
+    }
+    visitStruct(node, { frame, type_parameters }) {
+        const name = node.name;
+        const types = {};
+        if (node.type_parameters) {
+            node.type_parameters.forEach((t, index) => {
+                const type = type_parameters ? type_parameters[index] : (0, hm_1.tvar)();
+                t.accept(this, { frame, type });
+            });
+        }
+        node.body.forEach(b => {
+            const t = b.accept(this, { frame });
+            if (t !== undefined) {
+                const _t = t;
+                types[_t.name] = _t.type;
+            }
+        });
+        if (!(0, symtab_1.lookup_symbol)(name, frame))
+            (0, symtab_1.set_symbol)(name, node, frame);
+        return {
+            tag: "TRec",
+            trec: {
+                name,
+                types,
+                constraints: [exports.structTypeClass]
+            }
+        };
     }
     visitField(node, args) {
-        var _a;
         const name = node.field.name;
         let type = undefined;
         if (node.field.data_type)
-            type = (_a = node.field.data_type) === null || _a === void 0 ? void 0 : _a.accept(this, args);
+            type = node.field.data_type.accept(this, args);
         return {
             magic: "field",
             name,
@@ -553,14 +659,14 @@ class TypeChecker {
     }
     visitNumber(node, { frame }) {
         const tc = (0, symtab_1.lookup_symbol)(`tcon:integer`, frame);
-        const p = tcon("integer");
+        const p = (0, hm_1.tcon)("integer");
         if (p.tag == "TCon")
             p.tcon.constraints = [...tc];
         return p;
     }
     visitString(node, { frame }) {
         const tc = (0, symtab_1.lookup_symbol)(`tcon:string`, frame);
-        const p = tcon("string");
+        const p = (0, hm_1.tcon)("string");
         if (p.tag == "TCon")
             p.tcon.constraints = [...tc];
         return p;

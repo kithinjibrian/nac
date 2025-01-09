@@ -1,6 +1,6 @@
 export interface ASTVisitor {
-    before_accept?(node: ASTNode): any;
-    after_accept?(node: ASTNode): any;
+    before_accept?(node: ASTNode, args?: Record<string, any>): any;
+    after_accept?(node: ASTNode, args?: Record<string, any>): any;
     visitNumber?(node: NumberNode, args?: Record<string, any>): any;
     visitBoolean?(node: BooleanNode, args?: Record<string, any>): any;
     visitString?(node: StringNode, args?: Record<string, any>): any;
@@ -42,6 +42,11 @@ export interface ASTVisitor {
     visitGenericType?(node: GenericTypeNode, args?: Record<string, any>): any;
     visitStruct?(node: StructNode, args?: Record<string, any>): any;
     visitField?(node: FieldNode, args?: Record<string, any>): any;
+    visitEnum?(node: EnumNode, args?: Record<string, any>): any;
+    visitEnumVariant?(node: EnumVariantNode, args?: Record<string, any>): any;
+    visitStructVariant?(node: StructVariantNode, args?: Record<string, any>): any;
+    visitTupleVariant?(node: TupleVariantNode, args?: Record<string, any>): any;
+    visitConstantVariant?(node: ConstantVariantNode, args?: Record<string, any>): any;
 }
 export interface ASTNode {
     type: string;
@@ -94,17 +99,19 @@ export declare class FunctionDecNode extends ASTNodeBase {
     inbuilt: boolean;
     is_async: boolean;
     type_parameters?: TypeParameterNode[] | undefined;
+    return_type?: ASTNode | undefined;
     type: string;
-    constructor(identifier: string, params: ParametersListNode | undefined, body: BlockNode, inbuilt?: boolean, is_async?: boolean, type_parameters?: TypeParameterNode[] | undefined);
+    constructor(identifier: string, params: ParametersListNode | undefined, body: BlockNode, inbuilt?: boolean, is_async?: boolean, type_parameters?: TypeParameterNode[] | undefined, return_type?: ASTNode | undefined);
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
 }
 export declare class LambdaNode extends ASTNodeBase {
     params: ParametersListNode | undefined;
-    body: BlockNode;
+    body: ASTNode;
     is_async: boolean;
     type_parameters?: TypeParameterNode[] | undefined;
+    return_type?: ASTNode | undefined;
     type: string;
-    constructor(params: ParametersListNode | undefined, body: BlockNode, is_async?: boolean, type_parameters?: TypeParameterNode[] | undefined);
+    constructor(params: ParametersListNode | undefined, body: ASTNode, is_async?: boolean, type_parameters?: TypeParameterNode[] | undefined, return_type?: ASTNode | undefined);
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
 }
 export declare class ParametersListNode extends ASTNodeBase {
@@ -313,6 +320,40 @@ export declare class FieldNode extends ASTNodeBase {
     field: IdentifierNode;
     type: string;
     constructor(field: IdentifierNode);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export declare class EnumNode extends ASTNodeBase {
+    name: string;
+    body: EnumVariantNode[];
+    type_parameters?: TypeParameterNode[] | undefined;
+    type: string;
+    constructor(name: string, body: EnumVariantNode[], type_parameters?: TypeParameterNode[] | undefined);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export type EnumVariantValueNode = StructVariantNode | TupleVariantNode | ConstantVariantNode;
+export declare class EnumVariantNode extends ASTNodeBase {
+    name: string;
+    value?: EnumVariantValueNode | undefined;
+    type: string;
+    constructor(name: string, value?: EnumVariantValueNode | undefined);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export declare class StructVariantNode extends ASTNodeBase {
+    fields: FieldNode[];
+    type: string;
+    constructor(fields: FieldNode[]);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export declare class TupleVariantNode extends ASTNodeBase {
+    types: ASTNode[];
+    type: string;
+    constructor(types: ASTNode[]);
+    _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
+}
+export declare class ConstantVariantNode extends ASTNodeBase {
+    types: ASTNode;
+    type: string;
+    constructor(types: ASTNode);
     _accept(visitor: ASTVisitor, args?: Record<string, any>): void;
 }
 //# sourceMappingURL=ast.d.ts.map
